@@ -1,0 +1,1 @@
+{"root":["./src/dashboard.tsx","./src/main.tsx","./src/types.ts","./src/vite-env.d.ts","./src/vscode.ts","./src/components/agentcard.tsx","./src/components/fileactivitystream.tsx","./src/components/overlapalerts.tsx","./src/components/worktreestatus.tsx"],"version":"5.9.3"}

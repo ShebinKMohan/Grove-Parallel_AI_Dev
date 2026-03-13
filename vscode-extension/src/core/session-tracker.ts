@@ -189,7 +189,7 @@ export class SessionTracker implements vscode.Disposable {
      * Stop all active sessions.
      */
     stopAllSessions(): void {
-        for (const [terminal, _id] of this.terminalMap) {
+        for (const [terminal] of this.terminalMap) {
             terminal.dispose();
         }
     }

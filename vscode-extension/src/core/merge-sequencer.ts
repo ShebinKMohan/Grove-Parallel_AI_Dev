@@ -17,11 +17,9 @@ import { git, gitWrite, getCurrentBranch } from "../utils/git";
 import {
     getChangedFiles,
     getDiffStats,
-    listAllWorktrees,
     removeWorktree,
-    type WorktreeInfo,
 } from "./worktree-manager";
-import { log, logError } from "../utils/logger";
+import { logError } from "../utils/logger";
 
 // ────────────────────────────────────────────
 // Types
@@ -116,7 +114,7 @@ export interface MergeResult {
  * Generate a merge readiness report for a set of worktrees.
  */
 export async function generateMergeReport(
-    repoRoot: string,
+    _repoRoot: string,
     worktreePaths: string[],
     baseBranch: string = "main"
 ): Promise<MergeReport> {

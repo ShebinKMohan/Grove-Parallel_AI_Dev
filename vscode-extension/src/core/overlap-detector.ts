@@ -12,7 +12,6 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import { git } from "../utils/git";
-import { log, logError } from "../utils/logger";
 
 // ────────────────────────────────────────────
 // Types
@@ -95,7 +94,7 @@ export class OverlapDetector implements vscode.Disposable {
     readonly onDidChangeOverlaps = this._onDidChangeOverlaps.event;
 
     constructor(
-        private readonly repoRoot: string,
+        private readonly _repoRoot: string,
         private readonly debounceMs: number = 500
     ) {}
 

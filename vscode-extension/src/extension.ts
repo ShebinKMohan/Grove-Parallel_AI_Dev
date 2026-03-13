@@ -25,7 +25,6 @@ import { OverlapDetector } from "./core/overlap-detector";
 import {
     listTemplateNames,
     loadTemplate,
-    detectOwnershipOverlaps,
 } from "./core/template-manager";
 import {
     createWorktree,

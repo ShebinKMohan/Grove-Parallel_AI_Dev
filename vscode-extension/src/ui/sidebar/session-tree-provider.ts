@@ -8,7 +8,6 @@ import * as vscode from "vscode";
 import {
     SessionTracker,
     SessionInfo,
-    SessionStatus,
 } from "../../core/session-tracker";
 
 // ────────────────────────────────────────────

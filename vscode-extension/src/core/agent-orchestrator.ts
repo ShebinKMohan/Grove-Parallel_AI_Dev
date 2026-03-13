@@ -16,15 +16,12 @@ import * as fs from "fs";
 import * as path from "path";
 import {
     TeamTemplate,
-    AgentRole,
-    loadTemplate,
     detectOwnershipOverlaps,
     type OwnershipOverlap,
 } from "./template-manager";
 import {
     createWorktree,
     removeWorktree,
-    computeWorktreePath,
 } from "./worktree-manager";
 import { generateClaudeMd } from "./claude-md-generator";
 import { loadProjectConfig } from "./config-manager";

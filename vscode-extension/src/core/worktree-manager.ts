@@ -10,16 +10,12 @@ import * as path from "path";
 import {
     git,
     gitWrite,
-    getRepoRoot,
-    getCurrentBranch,
     branchExistsLocally,
     branchExistsOnRemote,
-    listLocalBranches,
-    GitError,
 } from "../utils/git";
 import { ensureGitignored } from "./gitignore";
 import { installDependencies } from "../utils/package-manager";
-import { log, logError } from "../utils/logger";
+import { log } from "../utils/logger";
 import {
     WorktreePilotError,
     BranchAlreadyCheckedOutError,
