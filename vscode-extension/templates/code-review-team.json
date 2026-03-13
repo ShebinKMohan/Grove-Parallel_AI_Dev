@@ -1,0 +1,29 @@
+{
+  "name": "Code Review Team",
+  "description": "Security + Performance + Architecture reviewers — thorough multi-perspective code review",
+  "agents": [
+    {
+      "role": "security",
+      "displayName": "Security Reviewer",
+      "ownership": [],
+      "prompt": "You are the security reviewer. Analyze the codebase for security vulnerabilities including: injection attacks (SQL, XSS, command), authentication/authorization flaws, data exposure, insecure dependencies, CSRF, and OWASP Top 10 issues. Write your findings to REVIEW.md with severity ratings.",
+      "readOnly": true
+    },
+    {
+      "role": "performance",
+      "displayName": "Performance Reviewer",
+      "ownership": [],
+      "prompt": "You are the performance reviewer. Analyze the codebase for performance issues including: N+1 queries, unnecessary re-renders, missing indexes, large bundle sizes, memory leaks, inefficient algorithms, and missing caching opportunities. Write your findings to REVIEW.md with impact ratings.",
+      "readOnly": true
+    },
+    {
+      "role": "architecture",
+      "displayName": "Architecture Reviewer",
+      "ownership": [],
+      "prompt": "You are the architecture reviewer. Analyze the codebase for architectural concerns including: separation of concerns, dependency management, error handling consistency, naming conventions, code duplication, testing gaps, and adherence to project conventions. Write your findings to REVIEW.md.",
+      "readOnly": true
+    }
+  ],
+  "mergeOrder": [],
+  "estimatedTokens": "75K-150K"
+}

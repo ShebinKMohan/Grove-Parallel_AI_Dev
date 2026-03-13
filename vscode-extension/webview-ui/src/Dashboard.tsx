@@ -3,12 +3,14 @@ import type {
     SessionInfo,
     WorktreeInfo,
     FileChange,
+    OverlapAlert,
     ExtensionMessage,
 } from "./types";
 import vscode from "./vscode";
 import { AgentCard } from "./components/AgentCard";
 import { FileActivityStream } from "./components/FileActivityStream";
 import { WorktreeStatus } from "./components/WorktreeStatus";
+import { OverlapAlerts } from "./components/OverlapAlerts";
 import "./dashboard.css";
 
 const MAX_FILE_CHANGES = 100;
@@ -17,6 +19,7 @@ export function Dashboard() {
     const [sessions, setSessions] = useState<SessionInfo[]>([]);
     const [worktrees, setWorktrees] = useState<WorktreeInfo[]>([]);
     const [fileChanges, setFileChanges] = useState<FileChange[]>([]);
+    const [overlaps, setOverlaps] = useState<OverlapAlert[]>([]);
 
     const handleMessage = useCallback(
         (event: MessageEvent<ExtensionMessage>) => {
@@ -25,6 +28,7 @@ export function Dashboard() {
                 case "update":
                     setSessions(message.sessions);
                     setWorktrees(message.worktrees);
+                    setOverlaps(message.overlaps);
                     break;
                 case "file-change":
                     setFileChanges((prev) => {
@@ -74,6 +78,9 @@ export function Dashboard() {
                         worktrees={worktrees}
                         activeSessions={activeSessions.length}
                     />
+
+                    {/* Overlap Alerts */}
+                    <OverlapAlerts overlaps={overlaps} />
 
                     {/* Active Sessions */}
                     {activeSessions.length > 0 && (

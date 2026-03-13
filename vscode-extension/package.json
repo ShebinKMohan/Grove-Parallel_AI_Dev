@@ -109,6 +109,54 @@
         "title": "Refresh",
         "category": "WorkTree Pilot",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "worktreePilot.launchTeam",
+        "title": "Launch Agent Team",
+        "category": "WorkTree Pilot",
+        "icon": "$(organization)"
+      },
+      {
+        "command": "worktreePilot.stopTeam",
+        "title": "Stop Team",
+        "category": "WorkTree Pilot",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "worktreePilot.stopAgent",
+        "title": "Stop Agent",
+        "category": "WorkTree Pilot",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "worktreePilot.focusAgent",
+        "title": "Open Agent Terminal",
+        "category": "WorkTree Pilot",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "worktreePilot.cleanupTeam",
+        "title": "Cleanup Team Worktrees",
+        "category": "WorkTree Pilot",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "worktreePilot.runOverlapCheck",
+        "title": "Check File Overlaps",
+        "category": "WorkTree Pilot",
+        "icon": "$(shield)"
+      },
+      {
+        "command": "worktreePilot.generateMergeReport",
+        "title": "Generate Merge Report",
+        "category": "WorkTree Pilot",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "worktreePilot.executeMergeSequence",
+        "title": "Execute Merge Sequence",
+        "category": "WorkTree Pilot",
+        "icon": "$(merge)"
       }
     ],
     "viewsContainers": {
@@ -151,7 +199,7 @@
       },
       {
         "view": "worktreePilot.teams",
-        "contents": "No agent teams running.\n\nTeam orchestration coming soon."
+        "contents": "No agent teams running.\n\nLaunch a team to orchestrate multiple Claude Code agents in parallel.\n\n[Launch Agent Team](command:worktreePilot.launchTeam)"
       }
     ],
     "menus": {
@@ -174,6 +222,11 @@
         {
           "command": "worktreePilot.clearCompletedSessions",
           "when": "view == worktreePilot.sessions",
+          "group": "navigation"
+        },
+        {
+          "command": "worktreePilot.launchTeam",
+          "when": "view == worktreePilot.teams",
           "group": "navigation"
         }
       ],
@@ -232,6 +285,46 @@
           "command": "worktreePilot.stopSession",
           "when": "viewItem == session-active",
           "group": "3_session"
+        },
+        {
+          "command": "worktreePilot.stopTeam",
+          "when": "viewItem == team-active",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreePilot.cleanupTeam",
+          "when": "viewItem == team-completed",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreePilot.stopTeam",
+          "when": "viewItem == team-active",
+          "group": "1_team"
+        },
+        {
+          "command": "worktreePilot.cleanupTeam",
+          "when": "viewItem == team-active || viewItem == team-completed",
+          "group": "2_team"
+        },
+        {
+          "command": "worktreePilot.focusAgent",
+          "when": "viewItem == agent-active",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreePilot.stopAgent",
+          "when": "viewItem == agent-active",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreePilot.focusAgent",
+          "when": "viewItem == agent-active",
+          "group": "1_agent"
+        },
+        {
+          "command": "worktreePilot.stopAgent",
+          "when": "viewItem == agent-active",
+          "group": "2_agent"
         }
       ],
       "commandPalette": [
@@ -273,6 +366,22 @@
         },
         {
           "command": "worktreePilot.clearCompletedSessions",
+          "when": "false"
+        },
+        {
+          "command": "worktreePilot.stopTeam",
+          "when": "false"
+        },
+        {
+          "command": "worktreePilot.stopAgent",
+          "when": "false"
+        },
+        {
+          "command": "worktreePilot.focusAgent",
+          "when": "false"
+        },
+        {
+          "command": "worktreePilot.cleanupTeam",
           "when": "false"
         }
       ]

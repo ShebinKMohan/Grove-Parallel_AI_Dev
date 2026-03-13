@@ -15,7 +15,18 @@ import {
     SessionTreeProvider,
     SessionTreeItem,
 } from "./ui/sidebar/session-tree-provider";
+import {
+    TeamTreeProvider,
+    AgentTreeItem,
+} from "./ui/sidebar/team-tree-provider";
 import { SessionTracker } from "./core/session-tracker";
+import { AgentOrchestrator } from "./core/agent-orchestrator";
+import { OverlapDetector } from "./core/overlap-detector";
+import {
+    listTemplateNames,
+    loadTemplate,
+    detectOwnershipOverlaps,
+} from "./core/template-manager";
 import {
     createWorktree,
     removeWorktree,
@@ -26,6 +37,15 @@ import {
 } from "./core/worktree-manager";
 import { openTerminal, openInNewWindow, launchClaude } from "./utils/terminal";
 import { DashboardPanel } from "./ui/webview/dashboard-panel";
+import {
+    generateMergeReport,
+    executeMergeStep,
+    abortMerge,
+    runTests,
+    detectTestCommand,
+    postMergeCleanup,
+    formatMergeReportMarkdown,
+} from "./core/merge-sequencer";
 import { WorktreePilotError } from "./utils/errors";
 import { log, logError, disposeLogger } from "./utils/logger";
 
@@ -60,6 +80,31 @@ export async function activate(
         return config.get<boolean>("notifyOnSessionComplete", true);
     });
 
+    // ── Agent Orchestrator & Overlap Detector ───────────────
+
+    const orchestrator = new AgentOrchestrator(repoRoot, sessionTracker);
+
+    const overlapConfig = vscode.workspace.getConfiguration("worktreePilot");
+    const overlapDetector = new OverlapDetector(
+        repoRoot,
+        overlapConfig.get<number>("fileWatcherDebounce", 500)
+    );
+
+    // Update overlap watchers when sessions change
+    sessionTracker.onDidChangeSessions(() => {
+        const activeSessions = sessionTracker.getActiveSessions();
+        if (activeSessions.length > 1) {
+            overlapDetector.watchWorktrees(
+                activeSessions.map((s) => ({
+                    path: s.worktreePath,
+                    branch: s.branch,
+                }))
+            );
+        } else {
+            overlapDetector.reset();
+        }
+    });
+
     // ── Tree Providers ──────────────────────────────────────
 
     const worktreeTreeProvider = new WorktreeTreeProvider();
@@ -68,6 +113,9 @@ export async function activate(
     const sessionTreeProvider = new SessionTreeProvider();
     sessionTreeProvider.setTracker(sessionTracker);
 
+    const teamTreeProvider = new TeamTreeProvider();
+    teamTreeProvider.setOrchestrator(orchestrator);
+
     const worktreeView = vscode.window.createTreeView(
         "worktreePilot.worktrees",
         { treeDataProvider: worktreeTreeProvider, showCollapseAll: true }
@@ -75,6 +123,10 @@ export async function activate(
     const sessionView = vscode.window.createTreeView(
         "worktreePilot.sessions",
         { treeDataProvider: sessionTreeProvider, showCollapseAll: true }
+    );
+    const teamView = vscode.window.createTreeView(
+        "worktreePilot.teams",
+        { treeDataProvider: teamTreeProvider, showCollapseAll: true }
     );
 
     // ── Status Bar ──────────────────────────────────────────
@@ -724,8 +776,600 @@ export async function activate(
                 DashboardPanel.createOrShow(
                     context.extensionUri,
                     repoRoot,
-                    sessionTracker
+                    sessionTracker,
+                    overlapDetector
                 );
+            }
+        )
+    );
+
+    // ── Team Commands ─────────────────────────────────────────
+
+    // Launch Agent Team
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            "worktreePilot.launchTeam",
+            async () => {
+                const config = vscode.workspace.getConfiguration("worktreePilot");
+                const templateDir = config.get<string>(
+                    "templateDirectory",
+                    ".worktreepilot/templates"
+                );
+
+                // 1. Pick a template
+                const templateList = listTemplateNames(repoRoot, templateDir);
+                if (templateList.length === 0) {
+                    void vscode.window.showWarningMessage(
+                        "No team templates found. Create one with " +
+                        "'WorkTree Pilot: Create Team Template'."
+                    );
+                    return;
+                }
+
+                const templatePick = await vscode.window.showQuickPick(
+                    templateList.map((t) => ({
+                        label: t.name,
+                        description: `(${t.source})`,
+                        detail: t.description,
+                    })),
+                    {
+                        placeHolder: "Select a team template",
+                        title: "WorkTree Pilot: Launch Agent Team",
+                    }
+                );
+                if (!templatePick) return;
+
+                const template = loadTemplate(
+                    templatePick.label,
+                    repoRoot,
+                    templateDir
+                );
+                if (!template) {
+                    void vscode.window.showErrorMessage(
+                        `Failed to load template: ${templatePick.label}`
+                    );
+                    return;
+                }
+
+                // 2. Get task description
+                const taskDescription = await vscode.window.showInputBox({
+                    prompt: "What should this team work on?",
+                    placeHolder: "e.g., Implement user authentication with JWT and OAuth",
+                    title: "WorkTree Pilot: Task Description",
+                });
+                if (taskDescription === undefined) return;
+
+                // 3. Get team name
+                const teamName = await vscode.window.showInputBox({
+                    prompt: "Team name (used for branch naming)",
+                    placeHolder: "e.g., auth-feature",
+                    title: "WorkTree Pilot: Team Name",
+                    validateInput: (value) => {
+                        if (!value) return "Team name is required.";
+                        if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(value)) {
+                            return "Use letters, numbers, dots, hyphens, underscores.";
+                        }
+                        return null;
+                    },
+                });
+                if (!teamName) return;
+
+                // 4. Pre-flight checks
+                const preflight = orchestrator.preFlight(template);
+
+                // Show overlaps if any
+                if (preflight.overlaps.length > 0) {
+                    const overlapMsg = preflight.overlaps
+                        .map((o) => `  ${o.pattern}: ${o.agents.join(", ")}`)
+                        .join("\n");
+                    const proceed = await vscode.window.showWarningMessage(
+                        `Ownership overlaps detected:\n${overlapMsg}`,
+                        { modal: true },
+                        "Continue Anyway",
+                        "Cancel"
+                    );
+                    if (proceed !== "Continue Anyway") return;
+                }
+
+                // Show warnings
+                if (preflight.warnings.length > 0 && preflight.overlaps.length === 0) {
+                    const proceed = await vscode.window.showWarningMessage(
+                        preflight.warnings.join("\n"),
+                        { modal: true },
+                        "Continue",
+                        "Cancel"
+                    );
+                    if (proceed !== "Continue") return;
+                }
+
+                // 5. Confirmation
+                const showEstimates = config.get<boolean>(
+                    "showTokenEstimates",
+                    true
+                );
+                const confirmMsg =
+                    `Launch "${template.name}" team "${teamName}"?\n\n` +
+                    `• ${template.agents.length} agents / worktrees\n` +
+                    `• Task: ${taskDescription || "(none)"}` +
+                    (showEstimates
+                        ? `\n• Estimated tokens: ${preflight.estimatedTokens}`
+                        : "");
+
+                const confirm = await vscode.window.showInformationMessage(
+                    confirmMsg,
+                    { modal: true },
+                    "Launch Team"
+                );
+                if (confirm !== "Launch Team") return;
+
+                // 6. Launch with progress
+                await vscode.window.withProgress(
+                    {
+                        location: vscode.ProgressLocation.Notification,
+                        title: `Launching team "${teamName}"...`,
+                        cancellable: false,
+                    },
+                    async () => {
+                        const team = await orchestrator.launchTeam(
+                            template,
+                            taskDescription || "",
+                            teamName
+                        );
+
+                        if (team) {
+                            refreshAll();
+
+                            const running = team.agents.filter(
+                                (a) => a.status === "running"
+                            ).length;
+                            void vscode.window.showInformationMessage(
+                                `Team "${teamName}" launched: ${running}/${template.agents.length} agents running.`,
+                                "Open Dashboard"
+                            ).then((action) => {
+                                if (action === "Open Dashboard") {
+                                    DashboardPanel.createOrShow(
+                                        context.extensionUri,
+                                        repoRoot,
+                                        sessionTracker,
+                                        overlapDetector
+                                    );
+                                }
+                            });
+                        }
+                    }
+                );
+            }
+        )
+    );
+
+    // Stop Team (from team context menu)
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            "worktreePilot.stopTeam",
+            async (item?: { team?: { id: string; name: string } }) => {
+                const teamId = item?.team?.id;
+                if (!teamId) return;
+
+                const confirm = await vscode.window.showWarningMessage(
+                    `Stop all agents in team "${item.team?.name}"?`,
+                    { modal: true },
+                    "Stop Team"
+                );
+                if (confirm !== "Stop Team") return;
+
+                orchestrator.stopTeam(teamId);
+                refreshAll();
+            }
+        )
+    );
+
+    // Stop Agent (from agent context menu in team tree)
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            "worktreePilot.stopAgent",
+            async (item?: AgentTreeItem) => {
+                if (!item?.agent || !item.teamId) return;
+
+                orchestrator.stopAgent(item.teamId, item.agent.role);
+                refreshAll();
+            }
+        )
+    );
+
+    // Focus Agent Terminal (from agent context menu in team tree)
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            "worktreePilot.focusAgent",
+            (item?: AgentTreeItem) => {
+                if (!item?.agent?.sessionId) return;
+
+                const terminal = sessionTracker.getTerminalForSession(
+                    item.agent.sessionId
+                );
+                if (terminal) {
+                    terminal.show();
+                } else {
+                    void vscode.window.showWarningMessage(
+                        "Terminal no longer available."
+                    );
+                }
+            }
+        )
+    );
+
+    // Cleanup Team (remove worktrees after merge)
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            "worktreePilot.cleanupTeam",
+            async (item?: { team?: { id: string; name: string } }) => {
+                const teamId = item?.team?.id;
+                if (!teamId) return;
+
+                const confirm = await vscode.window.showWarningMessage(
+                    `Delete all worktrees for team "${item.team?.name}"? This cannot be undone.`,
+                    { modal: true },
+                    "Delete Worktrees"
+                );
+                if (confirm !== "Delete Worktrees") return;
+
+                await vscode.window.withProgress(
+                    {
+                        location: vscode.ProgressLocation.Notification,
+                        title: `Cleaning up team "${item.team?.name}"...`,
+                        cancellable: false,
+                    },
+                    async () => {
+                        await orchestrator.cleanupTeam(teamId);
+                        refreshAll();
+                    }
+                );
+            }
+        )
+    );
+
+    // Run Overlap Check (manual scan)
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            "worktreePilot.runOverlapCheck",
+            async () => {
+                const activeSessions = sessionTracker.getActiveSessions();
+                if (activeSessions.length < 2) {
+                    void vscode.window.showInformationMessage(
+                        "Need at least 2 active sessions to check for overlaps."
+                    );
+                    return;
+                }
+
+                await vscode.window.withProgress(
+                    {
+                        location: vscode.ProgressLocation.Notification,
+                        title: "Scanning for file overlaps...",
+                        cancellable: false,
+                    },
+                    async () => {
+                        const config = vscode.workspace.getConfiguration("worktreePilot");
+                        const baseBranch = config.get<string>("defaultBaseBranch", "main");
+
+                        await overlapDetector.scanExistingChanges(
+                            activeSessions.map((s) => ({
+                                path: s.worktreePath,
+                                branch: s.branch,
+                            })),
+                            baseBranch
+                        );
+
+                        const count = overlapDetector.activeOverlapCount;
+                        if (count > 0) {
+                            const action = await vscode.window.showWarningMessage(
+                                `Found ${count} file overlap(s) across worktrees.`,
+                                "Open Dashboard"
+                            );
+                            if (action === "Open Dashboard") {
+                                DashboardPanel.createOrShow(
+                                    context.extensionUri,
+                                    repoRoot,
+                                    sessionTracker,
+                                    overlapDetector
+                                );
+                            }
+                        } else {
+                            void vscode.window.showInformationMessage(
+                                "No file overlaps detected."
+                            );
+                        }
+                    }
+                );
+            }
+        )
+    );
+
+    // ── Merge Commands ─────────────────────────────────────
+
+    // Generate Merge Report
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            "worktreePilot.generateMergeReport",
+            async () => {
+                const worktrees = await listAllWorktrees(repoRoot);
+                const nonMain = worktrees.filter((wt) => !wt.isMain);
+
+                if (nonMain.length === 0) {
+                    void vscode.window.showInformationMessage(
+                        "No worktrees to generate a merge report for."
+                    );
+                    return;
+                }
+
+                // Let user select which worktrees to include
+                const picks = await vscode.window.showQuickPick(
+                    nonMain.map((wt) => ({
+                        label: wt.branch,
+                        description: wt.statusSummary,
+                        detail: wt.path,
+                        picked: true,
+                        worktree: wt,
+                    })),
+                    {
+                        placeHolder: "Select worktrees to include in merge report",
+                        title: "WorkTree Pilot: Merge Report",
+                        canPickMany: true,
+                    }
+                );
+                if (!picks || picks.length === 0) return;
+
+                const config = vscode.workspace.getConfiguration("worktreePilot");
+                const baseBranch = config.get<string>("defaultBaseBranch", "main");
+
+                const report = await vscode.window.withProgress(
+                    {
+                        location: vscode.ProgressLocation.Notification,
+                        title: "Generating merge report...",
+                        cancellable: false,
+                    },
+                    async () =>
+                        generateMergeReport(
+                            repoRoot,
+                            picks.map((p) => p.worktree.path),
+                            baseBranch
+                        )
+                );
+
+                // Show report in a new untitled markdown document
+                const markdown = formatMergeReportMarkdown(report);
+                const doc = await vscode.workspace.openTextDocument({
+                    content: markdown,
+                    language: "markdown",
+                });
+                await vscode.window.showTextDocument(doc, {
+                    preview: true,
+                    viewColumn: vscode.ViewColumn.One,
+                });
+
+                // Summary notification
+                const overlapCount = report.overlaps.length;
+                const msg = overlapCount > 0
+                    ? `Merge report ready. ${overlapCount} file overlap(s) detected.`
+                    : "Merge report ready. No file overlaps detected.";
+                void vscode.window.showInformationMessage(msg);
+            }
+        )
+    );
+
+    // Execute Merge Sequence
+    context.subscriptions.push(
+        vscode.commands.registerCommand(
+            "worktreePilot.executeMergeSequence",
+            async () => {
+                const worktrees = await listAllWorktrees(repoRoot);
+                const nonMain = worktrees.filter((wt) => !wt.isMain);
+
+                if (nonMain.length === 0) {
+                    void vscode.window.showInformationMessage(
+                        "No worktrees to merge."
+                    );
+                    return;
+                }
+
+                // Select worktrees
+                const picks = await vscode.window.showQuickPick(
+                    nonMain.map((wt) => ({
+                        label: wt.branch,
+                        description: wt.statusSummary,
+                        detail: wt.path,
+                        picked: true,
+                        worktree: wt,
+                    })),
+                    {
+                        placeHolder: "Select worktrees to merge (in order)",
+                        title: "WorkTree Pilot: Merge Sequence",
+                        canPickMany: true,
+                    }
+                );
+                if (!picks || picks.length === 0) return;
+
+                const config = vscode.workspace.getConfiguration("worktreePilot");
+                const baseBranch = config.get<string>("defaultBaseBranch", "main");
+
+                // Detect test command
+                let testCmd = config.get<string>("testCommand", "");
+                if (!testCmd) {
+                    testCmd = detectTestCommand(repoRoot) ?? "";
+                }
+
+                const runTestsAfterMerge = testCmd
+                    ? (await vscode.window.showQuickPick(
+                          [
+                              { label: "Yes", description: `Run: ${testCmd}`, value: true },
+                              { label: "No", description: "Skip tests", value: false },
+                          ],
+                          {
+                              placeHolder: "Run tests after each merge?",
+                              title: "WorkTree Pilot: Test After Merge",
+                          }
+                      ))?.value ?? false
+                    : false;
+
+                // Confirmation
+                const confirm = await vscode.window.showWarningMessage(
+                    `Merge ${picks.length} branch(es) into ${baseBranch} sequentially?`,
+                    { modal: true },
+                    "Start Merge"
+                );
+                if (confirm !== "Start Merge") return;
+
+                // Execute merges sequentially
+                const results: Array<{ branch: string; status: string; message: string }> = [];
+
+                for (const pick of picks) {
+                    const branch = pick.worktree.branch;
+
+                    const step = await vscode.window.withProgress(
+                        {
+                            location: vscode.ProgressLocation.Notification,
+                            title: `Merging ${branch}...`,
+                            cancellable: false,
+                        },
+                        async () => executeMergeStep(repoRoot, branch, baseBranch)
+                    );
+
+                    if (step.status === "conflict") {
+                        const action = await vscode.window.showWarningMessage(
+                            `Merge conflict in ${branch}: ${step.conflictFiles?.join(", ")}`,
+                            { modal: true },
+                            "Open Terminal to Resolve",
+                            "Abort Merge",
+                            "Skip This Branch"
+                        );
+
+                        if (action === "Open Terminal to Resolve") {
+                            const terminal = openTerminal(
+                                `Resolve: ${branch}`,
+                                repoRoot
+                            );
+                            terminal.sendText("git status");
+
+                            await vscode.window.showInformationMessage(
+                                "Resolve conflicts in the terminal, commit, then click Continue.",
+                                { modal: true },
+                                "Continue"
+                            );
+
+                            results.push({
+                                branch,
+                                status: "resolved",
+                                message: "Conflicts resolved manually",
+                            });
+                        } else if (action === "Abort Merge") {
+                            await abortMerge(repoRoot);
+                            results.push({
+                                branch,
+                                status: "aborted",
+                                message: "Merge aborted",
+                            });
+                            break;
+                        } else {
+                            await abortMerge(repoRoot);
+                            results.push({
+                                branch,
+                                status: "skipped",
+                                message: "Skipped due to conflict",
+                            });
+                            continue;
+                        }
+                    } else if (step.status === "error") {
+                        results.push({
+                            branch,
+                            status: "error",
+                            message: step.message ?? "Unknown error",
+                        });
+
+                        const action = await vscode.window.showErrorMessage(
+                            `Failed to merge ${branch}: ${step.message}`,
+                            "Continue",
+                            "Abort"
+                        );
+                        if (action !== "Continue") break;
+                        continue;
+                    } else {
+                        results.push({
+                            branch,
+                            status: "merged",
+                            message: "Clean merge",
+                        });
+                    }
+
+                    // Run tests if configured
+                    if (runTestsAfterMerge && testCmd) {
+                        const testResult = await vscode.window.withProgress(
+                            {
+                                location: vscode.ProgressLocation.Notification,
+                                title: `Running tests after ${branch}...`,
+                                cancellable: false,
+                            },
+                            async () => runTests(repoRoot, testCmd)
+                        );
+
+                        if (!testResult.passed) {
+                            const action = await vscode.window.showWarningMessage(
+                                `Tests failed after merging ${branch}.`,
+                                { modal: true },
+                                "Continue Anyway",
+                                "Open Terminal",
+                                "Abort"
+                            );
+
+                            if (action === "Open Terminal") {
+                                openTerminal(`Tests: ${branch}`, repoRoot);
+                            }
+                            if (action === "Abort") {
+                                results[results.length - 1].status = "test-failed";
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Show summary
+                const succeeded = results.filter(
+                    (r) => r.status === "merged" || r.status === "resolved"
+                ).length;
+                const failed = results.filter(
+                    (r) => r.status === "error" || r.status === "test-failed"
+                ).length;
+                const skipped = results.filter(
+                    (r) => r.status === "skipped" || r.status === "aborted"
+                ).length;
+
+                const summary =
+                    `Merge complete: ${succeeded} succeeded` +
+                    (failed > 0 ? `, ${failed} failed` : "") +
+                    (skipped > 0 ? `, ${skipped} skipped` : "");
+
+                // Offer cleanup
+                if (succeeded > 0) {
+                    const cleanup = await vscode.window.showInformationMessage(
+                        summary,
+                        "Cleanup Merged Worktrees",
+                        "Keep Worktrees"
+                    );
+                    if (cleanup === "Cleanup Merged Worktrees") {
+                        const mergedPicks = picks.filter((_, i) =>
+                            results[i]?.status === "merged" || results[i]?.status === "resolved"
+                        );
+                        await postMergeCleanup(
+                            repoRoot,
+                            mergedPicks.map((p) => ({
+                                path: p.worktree.path,
+                                branch: p.worktree.branch,
+                            }))
+                        );
+                        refreshAll();
+                    }
+                } else {
+                    void vscode.window.showInformationMessage(summary);
+                }
+
+                refreshAll();
             }
         )
     );
@@ -752,9 +1396,13 @@ export async function activate(
     context.subscriptions.push(
         worktreeView,
         sessionView,
+        teamView,
         worktreeTreeProvider,
         sessionTreeProvider,
+        teamTreeProvider,
         sessionTracker,
+        orchestrator,
+        overlapDetector,
         statusBarItem,
         watcher
     );

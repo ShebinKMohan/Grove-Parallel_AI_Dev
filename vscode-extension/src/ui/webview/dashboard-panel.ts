@@ -13,6 +13,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import { SessionTracker } from "../../core/session-tracker";
+import { OverlapDetector } from "../../core/overlap-detector";
 import { listAllWorktrees, getWorktreeStatus } from "../../core/worktree-manager";
 import { openTerminal } from "../../utils/terminal";
 import { log, logError } from "../../utils/logger";
@@ -58,7 +59,8 @@ export class DashboardPanel implements vscode.Disposable {
         panel: vscode.WebviewPanel,
         extensionUri: vscode.Uri,
         private readonly repoRoot: string,
-        private readonly sessionTracker: SessionTracker
+        private readonly sessionTracker: SessionTracker,
+        private readonly overlapDetector?: OverlapDetector
     ) {
         this.panel = panel;
         this.extensionUri = extensionUri;
@@ -81,6 +83,15 @@ export class DashboardPanel implements vscode.Disposable {
             })
         );
 
+        // Listen for overlap changes
+        if (this.overlapDetector) {
+            this.disposables.push(
+                this.overlapDetector.onDidChangeOverlaps(() => {
+                    void this.sendUpdate();
+                })
+            );
+        }
+
         // Clean up when panel is closed
         this.panel.onDidDispose(
             () => this.dispose(),
@@ -102,7 +113,8 @@ export class DashboardPanel implements vscode.Disposable {
     static createOrShow(
         extensionUri: vscode.Uri,
         repoRoot: string,
-        sessionTracker: SessionTracker
+        sessionTracker: SessionTracker,
+        overlapDetector?: OverlapDetector
     ): DashboardPanel {
         // If panel already exists, reveal it
         if (DashboardPanel.currentPanel) {
@@ -128,7 +140,8 @@ export class DashboardPanel implements vscode.Disposable {
             panel,
             extensionUri,
             repoRoot,
-            sessionTracker
+            sessionTracker,
+            overlapDetector
         );
 
         return DashboardPanel.currentPanel;
@@ -224,6 +237,16 @@ export class DashboardPanel implements vscode.Disposable {
                 break;
             }
 
+            case "dismiss-overlap": {
+                const filePath = message.filePath as string;
+                this.overlapDetector?.dismissOverlap(filePath);
+                break;
+            }
+
+            case "dismiss-all-overlaps":
+                this.overlapDetector?.dismissAll();
+                break;
+
             case "refresh":
                 await this.sendUpdate();
                 break;
@@ -282,10 +305,13 @@ export class DashboardPanel implements vscode.Disposable {
                 }
             }
 
+            const overlaps = this.overlapDetector?.getOverlapAlerts() ?? [];
+
             void this.panel.webview.postMessage({
                 type: "update",
                 sessions,
                 worktrees,
+                overlaps,
             });
         } catch (err) {
             logError("Failed to send dashboard update", err);

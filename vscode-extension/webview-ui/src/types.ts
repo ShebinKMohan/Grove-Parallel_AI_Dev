@@ -38,9 +38,19 @@ export interface FileChange {
     changeType: "created" | "modified" | "deleted";
 }
 
+export type OverlapSeverity = "conflict" | "warning" | "info";
+
+export interface OverlapAlert {
+    filePath: string;
+    severity: OverlapSeverity;
+    branches: string[];
+    detectedAt: string;
+    dismissed: boolean;
+}
+
 /** Messages from extension to WebView */
 export type ExtensionMessage =
-    | { type: "update"; sessions: SessionInfo[]; worktrees: WorktreeInfo[] }
+    | { type: "update"; sessions: SessionInfo[]; worktrees: WorktreeInfo[]; overlaps: OverlapAlert[] }
     | { type: "file-change"; change: FileChange };
 
 /** Messages from WebView to extension */
@@ -49,5 +59,7 @@ export type WebViewMessage =
     | { type: "focus-session"; sessionId: string }
     | { type: "open-terminal"; worktreePath: string; branch: string }
     | { type: "view-diff"; worktreePath: string; branch: string }
+    | { type: "dismiss-overlap"; filePath: string }
+    | { type: "dismiss-all-overlaps" }
     | { type: "refresh" }
     | { type: "ready" };

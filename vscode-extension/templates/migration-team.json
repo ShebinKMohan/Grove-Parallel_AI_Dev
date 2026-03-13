@@ -1,0 +1,29 @@
+{
+  "name": "Migration Team",
+  "description": "Parallel agents for large-scale file migrations (e.g., framework upgrades, API changes)",
+  "agents": [
+    {
+      "role": "migrator-core",
+      "displayName": "Core Migrator",
+      "ownership": ["src/core/**", "src/lib/**", "src/utils/**"],
+      "prompt": "You are the core migrator. Migrate core library code, utilities, and shared modules. Ensure backward compatibility where possible and update all internal APIs. Update type definitions as needed.",
+      "readOnly": false
+    },
+    {
+      "role": "migrator-features",
+      "displayName": "Feature Migrator",
+      "ownership": ["src/features/**", "src/modules/**", "src/pages/**", "src/components/**"],
+      "prompt": "You are the feature migrator. Migrate feature modules, pages, and components. Update imports and API calls to match the new patterns established by the core migrator. Ensure each feature still works independently.",
+      "readOnly": false
+    },
+    {
+      "role": "migrator-tests",
+      "displayName": "Test Migrator",
+      "ownership": ["test/**", "tests/**", "src/**/*.test.*", "src/**/*.spec.*"],
+      "prompt": "You are the test migrator. Update all test files to work with the migrated code. Fix broken imports, update mocks and fixtures, and ensure test coverage is maintained. Add migration-specific tests where needed.",
+      "readOnly": false
+    }
+  ],
+  "mergeOrder": ["migrator-core", "migrator-features", "migrator-tests"],
+  "estimatedTokens": "200K-400K"
+}

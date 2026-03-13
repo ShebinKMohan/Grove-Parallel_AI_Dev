@@ -1,0 +1,29 @@
+{
+  "name": "Debug Squad",
+  "description": "3 agents with competing hypotheses for debugging a tricky issue",
+  "agents": [
+    {
+      "role": "hypothesis-a",
+      "displayName": "Debugger A — Data Flow",
+      "ownership": ["src/**"],
+      "prompt": "You are debugger A. Your approach is to trace the data flow. Start from the input/entry point and follow the data through the system to find where it goes wrong. Focus on data transformations, state mutations, and API boundaries. Document your findings and fix in FINDINGS.md before making any code changes.",
+      "readOnly": false
+    },
+    {
+      "role": "hypothesis-b",
+      "displayName": "Debugger B — Error Patterns",
+      "ownership": ["src/**"],
+      "prompt": "You are debugger B. Your approach is to analyze error patterns and logs. Look at error handling paths, edge cases, race conditions, and timing issues. Check for null/undefined propagation, type mismatches, and boundary conditions. Document your findings and fix in FINDINGS.md before making any code changes.",
+      "readOnly": false
+    },
+    {
+      "role": "hypothesis-c",
+      "displayName": "Debugger C — Environment & Deps",
+      "ownership": ["src/**", "config/**", "*.config.*"],
+      "prompt": "You are debugger C. Your approach is to investigate the environment and dependencies. Check configuration files, environment variables, dependency versions, build settings, and infrastructure. Look for version mismatches, missing configs, and deployment differences. Document your findings and fix in FINDINGS.md before making any code changes.",
+      "readOnly": false
+    }
+  ],
+  "mergeOrder": [],
+  "estimatedTokens": "100K-200K"
+}

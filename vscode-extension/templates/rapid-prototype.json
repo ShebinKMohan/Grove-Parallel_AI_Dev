@@ -1,0 +1,30 @@
+{
+  "name": "Rapid Prototype",
+  "description": "Designer + Implementer + Tester — fast prototype with built-in quality checks",
+  "agents": [
+    {
+      "role": "designer",
+      "displayName": "System Designer",
+      "ownership": ["docs/**", "src/types/**", "src/interfaces/**"],
+      "prompt": "You are the system designer. Design the data models, API interfaces, type definitions, and overall architecture for the feature. Write clear documentation in docs/ and create TypeScript interfaces/types that the implementer will use. Focus on clean contracts and extensibility.",
+      "claudeMdExtra": "Create DESIGN.md in docs/ with your architectural decisions and rationale.",
+      "readOnly": false
+    },
+    {
+      "role": "implementer",
+      "displayName": "Implementer",
+      "ownership": ["src/**"],
+      "prompt": "You are the implementer. Build the feature implementation based on the task description. Write clean, working code with proper error handling. Focus on getting a working prototype — it doesn't need to be perfect, but it needs to work end-to-end.",
+      "readOnly": false
+    },
+    {
+      "role": "tester",
+      "displayName": "Quality Tester",
+      "ownership": ["test/**", "tests/**", "src/**/*.test.*"],
+      "prompt": "You are the quality tester. Write tests for the new feature, focusing on happy paths first, then edge cases. Also review the implementation for obvious bugs and write any issues found to REVIEW.md.",
+      "readOnly": false
+    }
+  ],
+  "mergeOrder": ["designer", "implementer", "tester"],
+  "estimatedTokens": "100K-200K"
+}

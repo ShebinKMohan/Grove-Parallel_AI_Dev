@@ -398,6 +398,144 @@ body {
     white-space: nowrap;
 }
 
+/* ── Overlap Alerts ────────────────────────── */
+
+.overlap-alerts {
+    margin-bottom: 16px;
+    border: 1px solid var(--vscode-inputValidation-warningBorder, #cca700);
+    border-radius: 4px;
+    background: var(--vscode-inputValidation-warningBackground, rgba(204, 167, 0, 0.1));
+    padding: 12px;
+}
+
+.overlap-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.overlap-header .section-title {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+    color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.overlap-group {
+    margin-bottom: 8px;
+}
+
+.overlap-group:last-child {
+    margin-bottom: 0;
+}
+
+.overlap-group-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+    padding: 2px 6px;
+    border-radius: 2px;
+    display: inline-block;
+}
+
+.overlap-conflict {
+    color: var(--vscode-errorForeground, #f48771);
+    background: var(--vscode-inputValidation-errorBackground, rgba(255, 0, 0, 0.1));
+}
+
+.overlap-warning {
+    color: var(--vscode-editorWarning-foreground, #cca700);
+    background: var(--vscode-inputValidation-warningBackground, rgba(204, 167, 0, 0.1));
+}
+
+.overlap-info {
+    color: var(--vscode-editorInfo-foreground, #4fc1ff);
+    background: var(--vscode-inputValidation-infoBackground, rgba(79, 193, 255, 0.1));
+}
+
+.overlap-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 2px;
+    font-size: 12px;
+}
+
+.overlap-item:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.overlap-icon {
+    font-weight: 700;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 11px;
+    width: 18px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.overlap-icon.overlap-conflict {
+    color: var(--vscode-charts-red, #f14c4c);
+}
+
+.overlap-icon.overlap-warning {
+    color: var(--vscode-charts-yellow, #cca700);
+}
+
+.overlap-icon.overlap-info {
+    color: var(--vscode-charts-blue, #4fc1ff);
+}
+
+.overlap-details {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.overlap-file {
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 12px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.overlap-branches {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+}
+
+.overlap-branch {
+    font-family: var(--vscode-editor-font-family, monospace);
+}
+
+.overlap-sep {
+    color: var(--vscode-descriptionForeground);
+    opacity: 0.6;
+}
+
+.overlap-dismiss {
+    opacity: 0.5;
+    padding: 0 4px;
+    font-size: 11px;
+    background: transparent;
+    border: none;
+    color: var(--vscode-foreground);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.overlap-dismiss:hover {
+    opacity: 1;
+}
+
 /* ── Muted Text ────────────────────────────── */
 
 .text-muted {

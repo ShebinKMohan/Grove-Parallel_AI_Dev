@@ -1,0 +1,39 @@
+{
+  "name": "Full-Stack Team",
+  "description": "Backend + Frontend + Tests + Reviewer — covers a complete feature implementation",
+  "agents": [
+    {
+      "role": "backend",
+      "displayName": "Backend Architect",
+      "ownership": ["src/api/**", "src/models/**", "src/services/**", "src/middleware/**"],
+      "prompt": "You are the backend architect. Focus on API routes, database models, service logic, and server-side middleware. Write clean, well-structured backend code with proper error handling and validation.",
+      "claudeMdExtra": "Follow existing error handling conventions. Ensure all API endpoints have input validation.",
+      "readOnly": false
+    },
+    {
+      "role": "frontend",
+      "displayName": "Frontend Engineer",
+      "ownership": ["src/components/**", "src/pages/**", "src/hooks/**", "src/styles/**", "src/utils/client/**"],
+      "prompt": "You are the frontend engineer. Build UI components, pages, and client-side logic. Focus on user experience, accessibility, and responsive design.",
+      "claudeMdExtra": "Use existing component patterns. Ensure all interactive elements are keyboard accessible.",
+      "readOnly": false
+    },
+    {
+      "role": "tests",
+      "displayName": "Test Engineer",
+      "ownership": ["test/**", "tests/**", "src/**/*.test.*", "src/**/*.spec.*", "e2e/**"],
+      "prompt": "You are the test engineer. Write comprehensive unit tests, integration tests, and end-to-end tests for the new feature. Ensure edge cases are covered and tests are maintainable.",
+      "claudeMdExtra": "Follow existing test patterns. Aim for meaningful coverage, not just line coverage.",
+      "readOnly": false
+    },
+    {
+      "role": "reviewer",
+      "displayName": "Code Reviewer",
+      "ownership": [],
+      "prompt": "You are the code reviewer. Review the entire codebase for security issues, performance problems, architectural concerns, and code quality. Write your findings to REVIEW.md.",
+      "readOnly": true
+    }
+  ],
+  "mergeOrder": ["backend", "frontend", "tests"],
+  "estimatedTokens": "150K-300K"
+}
