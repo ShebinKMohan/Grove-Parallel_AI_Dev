@@ -1,0 +1,391 @@
+{
+  "name": "worktree-pilot",
+  "displayName": "WorkTree Pilot",
+  "description": "Control plane for parallel AI development — git worktree management, Claude Code session orchestration, and merge intelligence",
+  "version": "0.2.0",
+  "publisher": "worktree-pilot",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "SCM Providers",
+    "Other"
+  ],
+  "keywords": [
+    "git",
+    "worktree",
+    "claude",
+    "parallel development",
+    "AI agents",
+    "agent teams"
+  ],
+  "activationEvents": [
+    "workspaceContains:.git"
+  ],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "worktreePilot.createWorktree",
+        "title": "Create Worktree",
+        "category": "WorkTree Pilot",
+        "icon": "$(add)"
+      },
+      {
+        "command": "worktreePilot.deleteWorktree",
+        "title": "Delete Worktree",
+        "category": "WorkTree Pilot",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "worktreePilot.cleanupWorktrees",
+        "title": "Cleanup Stale Worktrees",
+        "category": "WorkTree Pilot",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "worktreePilot.launchSession",
+        "title": "Launch Claude Code in Worktree",
+        "category": "WorkTree Pilot",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "worktreePilot.openDashboard",
+        "title": "Open Dashboard",
+        "category": "WorkTree Pilot",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "worktreePilot.openInTerminal",
+        "title": "Open in Terminal",
+        "category": "WorkTree Pilot",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "worktreePilot.openInNewWindow",
+        "title": "Open in New Window",
+        "category": "WorkTree Pilot",
+        "icon": "$(multiple-windows)"
+      },
+      {
+        "command": "worktreePilot.viewDiff",
+        "title": "View Diff",
+        "category": "WorkTree Pilot",
+        "icon": "$(diff)"
+      },
+      {
+        "command": "worktreePilot.stopSession",
+        "title": "Stop Session",
+        "category": "WorkTree Pilot",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "worktreePilot.stopAllSessions",
+        "title": "Stop All Sessions",
+        "category": "WorkTree Pilot",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "worktreePilot.focusSession",
+        "title": "Open Session Terminal",
+        "category": "WorkTree Pilot",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "worktreePilot.setTaskDescription",
+        "title": "Set Task Description",
+        "category": "WorkTree Pilot",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "worktreePilot.clearCompletedSessions",
+        "title": "Clear Completed Sessions",
+        "category": "WorkTree Pilot",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "worktreePilot.refreshSidebar",
+        "title": "Refresh",
+        "category": "WorkTree Pilot",
+        "icon": "$(refresh)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "worktreePilot",
+          "title": "WorkTree Pilot",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "worktreePilot": [
+        {
+          "id": "worktreePilot.worktrees",
+          "name": "Worktrees",
+          "contextualTitle": "WorkTree Pilot",
+          "visibility": "visible"
+        },
+        {
+          "id": "worktreePilot.sessions",
+          "name": "Active Sessions",
+          "visibility": "collapsed"
+        },
+        {
+          "id": "worktreePilot.teams",
+          "name": "Agent Teams",
+          "visibility": "collapsed"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "worktreePilot.worktrees",
+        "contents": "No worktrees found.\n\nCreate a worktree to start working on multiple branches in parallel.\n\n[Create Worktree](command:worktreePilot.createWorktree)"
+      },
+      {
+        "view": "worktreePilot.sessions",
+        "contents": "No active Claude Code sessions.\n\nLaunch a session from a worktree to get started."
+      },
+      {
+        "view": "worktreePilot.teams",
+        "contents": "No agent teams running.\n\nTeam orchestration coming soon."
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "worktreePilot.createWorktree",
+          "when": "view == worktreePilot.worktrees",
+          "group": "navigation"
+        },
+        {
+          "command": "worktreePilot.refreshSidebar",
+          "when": "view == worktreePilot.worktrees",
+          "group": "navigation"
+        },
+        {
+          "command": "worktreePilot.stopAllSessions",
+          "when": "view == worktreePilot.sessions",
+          "group": "navigation"
+        },
+        {
+          "command": "worktreePilot.clearCompletedSessions",
+          "when": "view == worktreePilot.sessions",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "worktreePilot.launchSession",
+          "when": "viewItem == worktree || viewItem == worktree-main",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreePilot.openInTerminal",
+          "when": "viewItem == worktree || viewItem == worktree-main",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreePilot.openInNewWindow",
+          "when": "viewItem == worktree || viewItem == worktree-main",
+          "group": "1_open"
+        },
+        {
+          "command": "worktreePilot.launchSession",
+          "when": "viewItem == worktree || viewItem == worktree-main",
+          "group": "1_open"
+        },
+        {
+          "command": "worktreePilot.viewDiff",
+          "when": "viewItem == worktree || viewItem == worktree-main",
+          "group": "2_inspect"
+        },
+        {
+          "command": "worktreePilot.deleteWorktree",
+          "when": "viewItem == worktree",
+          "group": "3_manage"
+        },
+        {
+          "command": "worktreePilot.focusSession",
+          "when": "viewItem == session-active",
+          "group": "inline@1"
+        },
+        {
+          "command": "worktreePilot.stopSession",
+          "when": "viewItem == session-active",
+          "group": "inline@2"
+        },
+        {
+          "command": "worktreePilot.focusSession",
+          "when": "viewItem == session-active",
+          "group": "1_session"
+        },
+        {
+          "command": "worktreePilot.setTaskDescription",
+          "when": "viewItem == session-active || viewItem == session-completed",
+          "group": "2_session"
+        },
+        {
+          "command": "worktreePilot.stopSession",
+          "when": "viewItem == session-active",
+          "group": "3_session"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "worktreePilot.openInTerminal",
+          "when": "false"
+        },
+        {
+          "command": "worktreePilot.openInNewWindow",
+          "when": "false"
+        },
+        {
+          "command": "worktreePilot.launchSession",
+          "when": "false"
+        },
+        {
+          "command": "worktreePilot.deleteWorktree",
+          "when": "false"
+        },
+        {
+          "command": "worktreePilot.viewDiff",
+          "when": "false"
+        },
+        {
+          "command": "worktreePilot.refreshSidebar",
+          "when": "false"
+        },
+        {
+          "command": "worktreePilot.stopSession",
+          "when": "false"
+        },
+        {
+          "command": "worktreePilot.focusSession",
+          "when": "false"
+        },
+        {
+          "command": "worktreePilot.setTaskDescription",
+          "when": "false"
+        },
+        {
+          "command": "worktreePilot.clearCompletedSessions",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "WorkTree Pilot",
+      "properties": {
+        "worktreePilot.defaultBaseBranch": {
+          "type": "string",
+          "default": "main",
+          "description": "Default base branch for comparisons and new worktrees"
+        },
+        "worktreePilot.autoInstallDependencies": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically install dependencies after creating a worktree"
+        },
+        "worktreePilot.packageManager": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "npm",
+            "yarn",
+            "pnpm",
+            "pip",
+            "poetry"
+          ],
+          "description": "Package manager to use for dependency installation"
+        },
+        "worktreePilot.worktreeLocation": {
+          "type": "string",
+          "default": ".claude/worktrees",
+          "description": "Directory for worktrees relative to the repo root"
+        },
+        "worktreePilot.enableAgentTeams": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable Agent Teams features (sets CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS)"
+        },
+        "worktreePilot.templateDirectory": {
+          "type": "string",
+          "default": ".worktreepilot/templates",
+          "description": "Directory for team templates relative to the repo root"
+        },
+        "worktreePilot.testCommand": {
+          "type": "string",
+          "default": "",
+          "description": "Test command to run after merges (auto-detected from package.json if empty)"
+        },
+        "worktreePilot.maxConcurrentSessions": {
+          "type": "number",
+          "default": 5,
+          "description": "Maximum number of concurrent Claude Code sessions"
+        },
+        "worktreePilot.showTokenEstimates": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show estimated token cost before launching teams"
+        },
+        "worktreePilot.fileWatcherDebounce": {
+          "type": "number",
+          "default": 500,
+          "description": "Debounce interval in ms for file change events"
+        },
+        "worktreePilot.notifyOnSessionComplete": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notification when a Claude Code session completes"
+        },
+        "worktreePilot.autoGitignore": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically add worktree paths to .gitignore"
+        },
+        "worktreePilot.showStatusBarItem": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show worktree info in the status bar"
+        },
+        "worktreePilot.protectedBranches": {
+          "type": "array",
+          "default": [
+            "main",
+            "master",
+            "develop",
+            "production"
+          ],
+          "description": "Branches that cannot be deleted during cleanup"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "npm run build:webview && tsc -p ./",
+    "compile:ext": "tsc -p ./",
+    "build:webview": "cd webview-ui && npm run build",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js",
+    "package": "npm run compile && npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vscode/test-electron": "^2.3.8",
+    "@vscode/vsce": "^3.7.1",
+    "eslint": "^8.56.0",
+    "mocha": "^10.2.0",
+    "typescript": "^5.3.3"
+  }
+}

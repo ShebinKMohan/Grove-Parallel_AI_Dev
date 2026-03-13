@@ -1,0 +1,406 @@
+/**
+ * Dashboard WebView Panel — creates and manages the React-based
+ * dashboard inside a VS Code WebView tab.
+ *
+ * Handles:
+ * - HTML scaffolding with CSP
+ * - Bi-directional message passing (extension ↔ React app)
+ * - File activity watchers for active worktree directories
+ * - Periodic state sync with the React app
+ */
+
+import * as vscode from "vscode";
+import * as path from "path";
+import * as fs from "fs";
+import { SessionTracker } from "../../core/session-tracker";
+import { listAllWorktrees, getWorktreeStatus } from "../../core/worktree-manager";
+import { openTerminal } from "../../utils/terminal";
+import { log, logError } from "../../utils/logger";
+
+/** Serializable session info for the WebView */
+interface WebViewSessionInfo {
+    id: string;
+    worktreePath: string;
+    branch: string;
+    taskDescription: string;
+    startedAt: string;
+    endedAt?: string;
+    status: string;
+    exitCode?: number;
+    modifiedFiles: string[];
+}
+
+/** Serializable worktree info for the WebView */
+interface WebViewWorktreeInfo {
+    path: string;
+    branch: string;
+    commit: string;
+    isMain: boolean;
+    statusSummary: string;
+    status: {
+        modified: number;
+        staged: number;
+        untracked: number;
+        conflicts: number;
+    };
+}
+
+export class DashboardPanel implements vscode.Disposable {
+    private static currentPanel: DashboardPanel | undefined;
+    private readonly panel: vscode.WebviewPanel;
+    private readonly extensionUri: vscode.Uri;
+    private readonly disposables: vscode.Disposable[] = [];
+    private fileWatchers: vscode.FileSystemWatcher[] = [];
+    private refreshInterval: NodeJS.Timeout | undefined;
+    private fileChangeDebounce: Map<string, NodeJS.Timeout> = new Map();
+
+    private constructor(
+        panel: vscode.WebviewPanel,
+        extensionUri: vscode.Uri,
+        private readonly repoRoot: string,
+        private readonly sessionTracker: SessionTracker
+    ) {
+        this.panel = panel;
+        this.extensionUri = extensionUri;
+
+        // Set the HTML content
+        this.panel.webview.html = this.getHtmlContent();
+
+        // Listen for messages from the WebView
+        this.panel.webview.onDidReceiveMessage(
+            (message) => void this.handleWebViewMessage(message),
+            undefined,
+            this.disposables
+        );
+
+        // Listen for session changes
+        this.disposables.push(
+            this.sessionTracker.onDidChangeSessions(() => {
+                void this.sendUpdate();
+                this.updateFileWatchers();
+            })
+        );
+
+        // Clean up when panel is closed
+        this.panel.onDidDispose(
+            () => this.dispose(),
+            undefined,
+            this.disposables
+        );
+
+        // Start periodic refresh (every 5s for elapsed times)
+        this.refreshInterval = setInterval(() => {
+            if (this.panel.visible) {
+                void this.sendUpdate();
+            }
+        }, 5000);
+    }
+
+    /**
+     * Create or reveal the dashboard panel.
+     */
+    static createOrShow(
+        extensionUri: vscode.Uri,
+        repoRoot: string,
+        sessionTracker: SessionTracker
+    ): DashboardPanel {
+        // If panel already exists, reveal it
+        if (DashboardPanel.currentPanel) {
+            DashboardPanel.currentPanel.panel.reveal(vscode.ViewColumn.One);
+            return DashboardPanel.currentPanel;
+        }
+
+        // Create new panel
+        const panel = vscode.window.createWebviewPanel(
+            "worktreePilotDashboard",
+            "WorkTree Pilot",
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                retainContextWhenHidden: true,
+                localResourceRoots: [
+                    vscode.Uri.joinPath(extensionUri, "webview-ui", "dist"),
+                ],
+            }
+        );
+
+        DashboardPanel.currentPanel = new DashboardPanel(
+            panel,
+            extensionUri,
+            repoRoot,
+            sessionTracker
+        );
+
+        return DashboardPanel.currentPanel;
+    }
+
+    // ── HTML Content ─────────────────────────────────────────
+
+    private getHtmlContent(): string {
+        const webview = this.panel.webview;
+        const distUri = vscode.Uri.joinPath(
+            this.extensionUri,
+            "webview-ui",
+            "dist"
+        );
+
+        // Resolve asset paths
+        const scriptUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(distUri, "assets", "main.js")
+        );
+        const styleUri = webview.asWebviewUri(
+            vscode.Uri.joinPath(distUri, "assets", "index.css")
+        );
+
+        // CSP nonce for security
+        const nonce = getNonce();
+
+        return /* html */ `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+        http-equiv="Content-Security-Policy"
+        content="default-src 'none';
+                 style-src ${webview.cspSource} 'unsafe-inline';
+                 script-src 'nonce-${nonce}';
+                 font-src ${webview.cspSource};"
+    />
+    <link rel="stylesheet" href="${styleUri}" />
+    <title>WorkTree Pilot</title>
+</head>
+<body>
+    <div id="root"></div>
+    <script nonce="${nonce}" src="${scriptUri}"></script>
+</body>
+</html>`;
+    }
+
+    // ── Message Handling ─────────────────────────────────────
+
+    private async handleWebViewMessage(message: {
+        type: string;
+        [key: string]: unknown;
+    }): Promise<void> {
+        switch (message.type) {
+            case "ready":
+                await this.sendUpdate();
+                this.updateFileWatchers();
+                break;
+
+            case "stop-session": {
+                const sessionId = message.sessionId as string;
+                this.sessionTracker.stopSession(sessionId);
+                break;
+            }
+
+            case "focus-session": {
+                const sessionId = message.sessionId as string;
+                const terminal =
+                    this.sessionTracker.getTerminalForSession(sessionId);
+                if (terminal) {
+                    terminal.show();
+                }
+                break;
+            }
+
+            case "view-diff": {
+                const worktreePath = message.worktreePath as string;
+                const branch = message.branch as string;
+                const terminal = openTerminal(
+                    `Diff: ${branch}`,
+                    worktreePath
+                );
+                const config =
+                    vscode.workspace.getConfiguration("worktreePilot");
+                const baseBranch = config.get<string>(
+                    "defaultBaseBranch",
+                    "main"
+                );
+                terminal.sendText(
+                    `git diff ${baseBranch}...HEAD --stat`
+                );
+                break;
+            }
+
+            case "refresh":
+                await this.sendUpdate();
+                break;
+
+            default:
+                log(`Unknown webview message: ${message.type}`);
+        }
+    }
+
+    // ── State Sync ───────────────────────────────────────────
+
+    private async sendUpdate(): Promise<void> {
+        try {
+            const sessions = this.sessionTracker
+                .getAllSessions()
+                .map(
+                    (s): WebViewSessionInfo => ({
+                        id: s.id,
+                        worktreePath: s.worktreePath,
+                        branch: s.branch,
+                        taskDescription: s.taskDescription,
+                        startedAt: s.startedAt,
+                        endedAt: s.endedAt,
+                        status: s.status,
+                        exitCode: s.exitCode,
+                        modifiedFiles: s.modifiedFiles,
+                    })
+                );
+
+            const rawWorktrees = await listAllWorktrees(this.repoRoot);
+            const worktrees: WebViewWorktreeInfo[] = [];
+
+            for (const wt of rawWorktrees) {
+                try {
+                    const status = await getWorktreeStatus(wt.path);
+                    worktrees.push({
+                        path: wt.path,
+                        branch: wt.branch,
+                        commit: wt.commit.slice(0, 7),
+                        isMain: wt.isMain,
+                        statusSummary:
+                            status.modified + status.staged + status.untracked + status.conflicts > 0
+                                ? "changes"
+                                : "clean",
+                        status,
+                    });
+                } catch {
+                    worktrees.push({
+                        path: wt.path,
+                        branch: wt.branch,
+                        commit: wt.commit.slice(0, 7),
+                        isMain: wt.isMain,
+                        statusSummary: "unknown",
+                        status: { modified: 0, staged: 0, untracked: 0, conflicts: 0 },
+                    });
+                }
+            }
+
+            void this.panel.webview.postMessage({
+                type: "update",
+                sessions,
+                worktrees,
+            });
+        } catch (err) {
+            logError("Failed to send dashboard update", err);
+        }
+    }
+
+    // ── File Activity Watchers ───────────────────────────────
+
+    private updateFileWatchers(): void {
+        // Dispose old watchers
+        for (const watcher of this.fileWatchers) {
+            watcher.dispose();
+        }
+        this.fileWatchers = [];
+
+        // Create watchers for each active session's worktree
+        const activeSessions = this.sessionTracker.getActiveSessions();
+        const config = vscode.workspace.getConfiguration("worktreePilot");
+        const debounceMs = config.get<number>("fileWatcherDebounce", 500);
+
+        for (const session of activeSessions) {
+            if (!fs.existsSync(session.worktreePath)) continue;
+
+            // Scoped glob — excludes node_modules, .git, dist, __pycache__
+            // to avoid overwhelming VS Code's file watcher
+            const pattern = new vscode.RelativePattern(
+                session.worktreePath,
+                "{src,lib,app,test,tests,pkg,cmd,internal}/**/*"
+            );
+
+            const watcher = vscode.workspace.createFileSystemWatcher(
+                pattern,
+                false,
+                false,
+                false
+            );
+
+            const sendFileChange = (
+                uri: vscode.Uri,
+                changeType: "created" | "modified" | "deleted"
+            ): void => {
+                // Skip .git directory changes
+                const relativePath = path.relative(session.worktreePath, uri.fsPath);
+                if (relativePath.startsWith(".git")) return;
+                // Skip node_modules, __pycache__, etc.
+                if (
+                    relativePath.includes("node_modules") ||
+                    relativePath.includes("__pycache__")
+                ) {
+                    return;
+                }
+
+                // Debounce per file
+                const key = `${session.id}:${uri.fsPath}`;
+                const existing = this.fileChangeDebounce.get(key);
+                if (existing) clearTimeout(existing);
+
+                this.fileChangeDebounce.set(
+                    key,
+                    setTimeout(() => {
+                        this.fileChangeDebounce.delete(key);
+                        void this.panel.webview.postMessage({
+                            type: "file-change",
+                            change: {
+                                timestamp: new Date().toISOString(),
+                                worktreePath: session.worktreePath,
+                                branch: session.branch,
+                                filePath: relativePath,
+                                changeType,
+                            },
+                        });
+                    }, debounceMs)
+                );
+            };
+
+            watcher.onDidCreate((uri) => sendFileChange(uri, "created"));
+            watcher.onDidChange((uri) => sendFileChange(uri, "modified"));
+            watcher.onDidDelete((uri) => sendFileChange(uri, "deleted"));
+
+            this.fileWatchers.push(watcher);
+        }
+    }
+
+    // ── Disposal ─────────────────────────────────────────────
+
+    dispose(): void {
+        DashboardPanel.currentPanel = undefined;
+
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+        }
+
+        for (const timeout of this.fileChangeDebounce.values()) {
+            clearTimeout(timeout);
+        }
+        this.fileChangeDebounce.clear();
+
+        for (const watcher of this.fileWatchers) {
+            watcher.dispose();
+        }
+
+        for (const d of this.disposables) {
+            d.dispose();
+        }
+
+        this.panel.dispose();
+    }
+}
+
+function getNonce(): string {
+    let text = "";
+    const possible =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
+}
