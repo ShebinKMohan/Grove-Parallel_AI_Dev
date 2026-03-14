@@ -507,13 +507,15 @@ export async function activate(
         // Prompt for task description if not provided
         let task = taskDescription;
         if (task === undefined) {
-            task =
-                (await vscode.window.showInputBox({
-                    prompt: "What should Claude work on? (optional)",
-                    placeHolder:
-                        "e.g., Implement user authentication with JWT",
-                    title: "Grove: Task Description",
-                })) ?? "";
+            const input = await vscode.window.showInputBox({
+                prompt: "What should Claude work on? (optional)",
+                placeHolder:
+                    "e.g., Implement user authentication with JWT",
+                title: "Grove: Task Description",
+            });
+            // undefined means the user pressed Escape — cancel the launch
+            if (input === undefined) return;
+            task = input;
         }
 
         const terminal = await launchClaude(branch, worktreePath);
