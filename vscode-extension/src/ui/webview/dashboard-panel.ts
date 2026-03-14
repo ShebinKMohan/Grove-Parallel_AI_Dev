@@ -125,8 +125,8 @@ export class DashboardPanel implements vscode.Disposable {
 
         // Create new panel
         const panel = vscode.window.createWebviewPanel(
-            "worktreePilotDashboard",
-            "WorkTree Pilot",
+            "groveDashboard",
+            "Grove",
             vscode.ViewColumn.One,
             {
                 enableScripts: true,
@@ -182,7 +182,7 @@ export class DashboardPanel implements vscode.Disposable {
                  font-src ${webview.cspSource};"
     />
     <link rel="stylesheet" href="${styleUri}" />
-    <title>WorkTree Pilot</title>
+    <title>Grove</title>
 </head>
 <body>
     <div id="root"></div>
@@ -227,7 +227,7 @@ export class DashboardPanel implements vscode.Disposable {
                     worktreePath
                 );
                 const config =
-                    vscode.workspace.getConfiguration("worktreePilot");
+                    vscode.workspace.getConfiguration("grove");
                 const baseBranch = config.get<string>(
                     "defaultBaseBranch",
                     "main"
@@ -319,7 +319,7 @@ export class DashboardPanel implements vscode.Disposable {
 
         // Create watchers for each active session's worktree
         const activeSessions = this.sessionTracker.getActiveSessions();
-        const config = vscode.workspace.getConfiguration("worktreePilot");
+        const config = vscode.workspace.getConfiguration("grove");
         const debounceMs = config.get<number>("fileWatcherDebounce", 500);
 
         for (const session of activeSessions) {

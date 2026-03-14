@@ -336,7 +336,7 @@ export class OverlapDetector implements vscode.Disposable {
                         "Dismiss"
                     ).then((action) => {
                         if (action === "View Overlaps") {
-                            void vscode.commands.executeCommand("worktreePilot.openDashboard");
+                            void vscode.commands.executeCommand("grove.openDashboard");
                         } else if (action === "Dismiss") {
                             this.dismissOverlap(relativePath);
                         }

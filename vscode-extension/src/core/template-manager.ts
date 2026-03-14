@@ -2,8 +2,8 @@
  * Template Manager — loads, validates, and manages Agent Team templates.
  *
  * Templates are JSON files stored at:
- * - Project level: `.worktreepilot/templates/`
- * - Global level: `~/.worktreepilot/templates/`
+ * - Project level: `.grove/templates/`
+ * - Global level: `~/.grove/templates/`
  * Project templates override global ones (matched by name).
  *
  * No VS Code dependency — pure filesystem operations.
@@ -56,7 +56,7 @@ export interface TemplateValidationError {
 
 const GLOBAL_TEMPLATE_DIR = path.join(
     os.homedir(),
-    ".worktreepilot",
+    ".grove",
     "templates"
 );
 
@@ -84,7 +84,7 @@ export function initTemplateManager(extensionPath: string): void {
  */
 export function loadAllTemplates(
     repoRoot: string,
-    templateDir: string = ".worktreepilot/templates"
+    templateDir: string = ".grove/templates"
 ): TeamTemplate[] {
     const templates = new Map<string, TeamTemplate>();
 
@@ -108,7 +108,7 @@ export function loadAllTemplates(
 export function loadTemplate(
     name: string,
     repoRoot: string,
-    templateDir: string = ".worktreepilot/templates"
+    templateDir: string = ".grove/templates"
 ): TeamTemplate | undefined {
     const all = loadAllTemplates(repoRoot, templateDir);
     return all.find((t) => t.name === name);
@@ -119,7 +119,7 @@ export function loadTemplate(
  */
 export function listTemplateNames(
     repoRoot: string,
-    templateDir: string = ".worktreepilot/templates"
+    templateDir: string = ".grove/templates"
 ): Array<{ name: string; description: string; source: string }> {
     const result: Array<{ name: string; description: string; source: string }> = [];
     const seen = new Set<string>();

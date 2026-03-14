@@ -4,36 +4,36 @@
 
 import * as assert from "assert";
 import {
-    WorktreePilotError,
+    GroveError,
     BranchAlreadyCheckedOutError,
     WorktreePathExistsError,
 } from "../../src/utils/errors";
 
-describe("WorktreePilotError", () => {
+describe("GroveError", () => {
     it("sets message and fix", () => {
-        const err = new WorktreePilotError("something failed", "try this fix");
+        const err = new GroveError("something failed", "try this fix");
         assert.strictEqual(err.message, "something failed");
         assert.strictEqual(err.fix, "try this fix");
     });
 
-    it("sets name to WorktreePilotError", () => {
-        const err = new WorktreePilotError("msg", "fix");
-        assert.strictEqual(err.name, "WorktreePilotError");
+    it("sets name to GroveError", () => {
+        const err = new GroveError("msg", "fix");
+        assert.strictEqual(err.name, "GroveError");
     });
 
     it("stores original error when provided", () => {
         const original = new Error("original");
-        const err = new WorktreePilotError("msg", "fix", original);
+        const err = new GroveError("msg", "fix", original);
         assert.strictEqual(err.originalError, original);
     });
 
     it("originalError is undefined when not provided", () => {
-        const err = new WorktreePilotError("msg", "fix");
+        const err = new GroveError("msg", "fix");
         assert.strictEqual(err.originalError, undefined);
     });
 
     it("is an instance of Error", () => {
-        const err = new WorktreePilotError("msg", "fix");
+        const err = new GroveError("msg", "fix");
         assert.ok(err instanceof Error);
     });
 });

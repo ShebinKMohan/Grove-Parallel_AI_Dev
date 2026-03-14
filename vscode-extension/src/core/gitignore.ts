@@ -41,7 +41,7 @@ export function ensureGitignored(
     } else {
         fs.writeFileSync(
             gitignorePath,
-            `# WorkTree Pilot managed worktrees\n${pattern}\n`
+            `# Grove managed worktrees\n${pattern}\n`
         );
     }
 

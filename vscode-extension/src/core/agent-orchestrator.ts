@@ -93,7 +93,7 @@ export class AgentOrchestrator implements vscode.Disposable {
      * Run pre-flight checks before launching a team.
      */
     preFlight(template: TeamTemplate): PreFlightResult {
-        const config = vscode.workspace.getConfiguration("worktreePilot");
+        const config = vscode.workspace.getConfiguration("grove");
         const agentTeamsEnabled = config.get<boolean>("enableAgentTeams", true);
         const maxSessions = config.get<number>("maxConcurrentSessions", 5);
 
@@ -151,7 +151,7 @@ export class AgentOrchestrator implements vscode.Disposable {
         taskDescription: string,
         teamName: string
     ): Promise<TeamState | undefined> {
-        const config = vscode.workspace.getConfiguration("worktreePilot");
+        const config = vscode.workspace.getConfiguration("grove");
         const worktreeDir = config.get<string>(
             "worktreeLocation",
             ".claude/worktrees"
@@ -393,7 +393,7 @@ export class AgentOrchestrator implements vscode.Disposable {
         for (const agent of team.agents) {
             if (agent.worktreePath) {
                 try {
-                    const config = vscode.workspace.getConfiguration("worktreePilot");
+                    const config = vscode.workspace.getConfiguration("grove");
                     const protectedBranches = config.get<string[]>(
                         "protectedBranches",
                         ["main", "master", "develop", "production"]

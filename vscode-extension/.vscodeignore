@@ -15,7 +15,7 @@ tsconfig.json
 .gitignore
 **/*.ts
 **/*.map
-.worktreepilot/**
+.grove/**
 .claude/**
 *.vsix
 DOCUMENTATION.md

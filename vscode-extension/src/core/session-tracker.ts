@@ -3,7 +3,7 @@
  * Maps VS Code Terminal instances to worktrees and persists session data.
  *
  * Sessions are tracked in-memory with JSON file persistence at
- * .worktreepilot/sessions.json for cross-restart state.
+ * .grove/sessions.json for cross-restart state.
  */
 
 import * as vscode from "vscode";
@@ -306,7 +306,7 @@ export class SessionTracker implements vscode.Disposable {
 
         // Refresh modified files one last time
         try {
-            const config = vscode.workspace.getConfiguration("worktreePilot");
+            const config = vscode.workspace.getConfiguration("grove");
             const baseBranch = config.get<string>("defaultBaseBranch", "main");
             session.modifiedFiles = await getChangedFiles(
                 session.worktreePath,
@@ -340,7 +340,7 @@ export class SessionTracker implements vscode.Disposable {
                     cwd: session.worktreePath,
                 });
                 diffTerminal.show();
-                const config = vscode.workspace.getConfiguration("worktreePilot");
+                const config = vscode.workspace.getConfiguration("grove");
                 const baseBranch = config.get<string>("defaultBaseBranch", "main");
                 diffTerminal.sendText(`git diff ${sanitizeRefName(baseBranch)}...HEAD --stat`);
             }
@@ -356,7 +356,7 @@ export class SessionTracker implements vscode.Disposable {
     // ── Persistence ─────────────────────────────────────────
 
     private get sessionsFilePath(): string {
-        return path.join(this.repoRoot, ".worktreepilot", "sessions.json");
+        return path.join(this.repoRoot, ".grove", "sessions.json");
     }
 
     private persistSessions(): void {

@@ -1,5 +1,5 @@
 /**
- * WorkTree Pilot — VS Code Extension Entry Point.
+ * Grove — VS Code Extension Entry Point.
  * Control plane for parallel AI development with git worktrees.
  *
  * Registers all commands, views, and lifecycle management.
@@ -41,19 +41,19 @@ import {
     postMergeCleanup,
     formatMergeReportMarkdown,
 } from "./core/merge-sequencer";
-import { WorktreePilotError } from "./utils/errors";
+import { GroveError } from "./utils/errors";
 import { log, logError, disposeLogger } from "./utils/logger";
 
 /** Read the user-configured protected branches list from VS Code settings. */
 function getProtectedBranches(): string[] {
-    const config = vscode.workspace.getConfiguration("worktreePilot");
+    const config = vscode.workspace.getConfiguration("grove");
     return config.get<string[]>("protectedBranches", ["main", "master", "develop", "production"]);
 }
 
 export async function activate(
     context: vscode.ExtensionContext
 ): Promise<void> {
-    log("WorkTree Pilot activating...");
+    log("Grove activating...");
     initTemplateManager(context.extensionPath);
 
     // ── Tree Providers (register unconditionally) ─────────
@@ -64,12 +64,12 @@ export async function activate(
     const completedProvider = new CompletedTreeProvider();
 
     const explorerView = vscode.window.createTreeView(
-        "worktreePilot.explorer",
+        "grove.explorer",
         { treeDataProvider: unifiedProvider, showCollapseAll: true }
     );
 
     const completedView = vscode.window.createTreeView(
-        "worktreePilot.completed",
+        "grove.completed",
         { treeDataProvider: completedProvider, showCollapseAll: true }
     );
 
@@ -97,7 +97,7 @@ export async function activate(
     // ── Session Tracker ─────────────────────────────────────
 
     const sessionTracker = new SessionTracker(repoRoot, () => {
-        const config = vscode.workspace.getConfiguration("worktreePilot");
+        const config = vscode.workspace.getConfiguration("grove");
         return config.get<boolean>("notifyOnSessionComplete", true);
     });
 
@@ -105,7 +105,7 @@ export async function activate(
 
     const orchestrator = new AgentOrchestrator(repoRoot, sessionTracker);
 
-    const overlapConfig = vscode.workspace.getConfiguration("worktreePilot");
+    const overlapConfig = vscode.workspace.getConfiguration("grove");
     const overlapDetector = new OverlapDetector(
         repoRoot,
         overlapConfig.get<number>("fileWatcherDebounce", 500)
@@ -140,10 +140,10 @@ export async function activate(
         vscode.StatusBarAlignment.Left,
         100
     );
-    statusBarItem.command = "worktreePilot.quickMenu";
+    statusBarItem.command = "grove.quickMenu";
 
     async function updateStatusBar(): Promise<void> {
-        const config = vscode.workspace.getConfiguration("worktreePilot");
+        const config = vscode.workspace.getConfiguration("grove");
         if (!config.get<boolean>("showStatusBarItem", true)) {
             statusBarItem.hide();
             return;
@@ -158,7 +158,7 @@ export async function activate(
             }
             statusBarItem.text = text;
             statusBarItem.tooltip =
-                `WorkTree Pilot: ${worktrees.length} worktree(s)` +
+                `Grove: ${worktrees.length} worktree(s)` +
                 (activeSessionCount > 0
                     ? `, ${activeSessionCount} active session(s)`
                     : "") +
@@ -194,14 +194,14 @@ export async function activate(
     // Create Worktree (streamlined single-input flow)
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.createWorktree",
+            "grove.createWorktree",
             async () => {
                 // Single input: branch name (e.g. feature/add-login)
                 const branchName = await vscode.window.showInputBox({
                     prompt: "Branch name for the new worktree",
                     placeHolder:
                         "Branch name, e.g. feature/add-login or fix/bug-123",
-                    title: "WorkTree Pilot: Create Worktree",
+                    title: "Grove: Create Worktree",
                     validateInput: (value) => {
                         if (!value) return "Branch name cannot be empty.";
                         return validateBranchName(value);
@@ -211,7 +211,7 @@ export async function activate(
 
                 // Smart defaults
                 const config =
-                    vscode.workspace.getConfiguration("worktreePilot");
+                    vscode.workspace.getConfiguration("grove");
                 const baseBranch = config.get<string>(
                     "defaultBaseBranch",
                     "main"
@@ -271,7 +271,7 @@ export async function activate(
                     }
                 } catch (err) {
                     logError("Failed to create worktree", err);
-                    if (err instanceof WorktreePilotError) {
+                    if (err instanceof GroveError) {
                         void vscode.window.showErrorMessage(
                             `${err.message}\n\nFix: ${err.fix}`
                         );
@@ -288,7 +288,7 @@ export async function activate(
     // Delete Worktree (context menu on single worktree)
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.deleteWorktree",
+            "grove.deleteWorktree",
             async (item?: WorktreeItem) => {
                 if (!item?.worktree) return;
                 const wt = item.worktree;
@@ -368,7 +368,7 @@ export async function activate(
     // Cleanup Worktrees (batch cleanup wizard)
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.cleanupWorktrees",
+            "grove.cleanupWorktrees",
             async () => {
                 let worktrees;
                 try {
@@ -397,7 +397,7 @@ export async function activate(
 
                 const picked = await vscode.window.showQuickPick(items, {
                     placeHolder: "Select worktrees to remove",
-                    title: "WorkTree Pilot: Cleanup",
+                    title: "Grove: Cleanup",
                     canPickMany: true,
                 });
                 if (!picked || picked.length === 0) return;
@@ -495,7 +495,7 @@ export async function activate(
         taskDescription?: string
     ): Promise<void> {
         // Check max concurrent sessions
-        const config = vscode.workspace.getConfiguration("worktreePilot");
+        const config = vscode.workspace.getConfiguration("grove");
         const maxSessions = config.get<number>("maxConcurrentSessions", 5);
         if (sessionTracker.activeCount >= maxSessions) {
             void showAutoWarning(
@@ -512,7 +512,7 @@ export async function activate(
                     prompt: "What should Claude work on? (optional)",
                     placeHolder:
                         "e.g., Implement user authentication with JWT",
-                    title: "WorkTree Pilot: Task Description",
+                    title: "Grove: Task Description",
                 })) ?? "";
         }
 
@@ -530,7 +530,7 @@ export async function activate(
     // Launch Claude Code in Worktree (from worktree context menu)
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.launchSession",
+            "grove.launchSession",
             async (item?: WorktreeItem) => {
                 if (!item?.worktree) return;
 
@@ -579,7 +579,7 @@ export async function activate(
     // Stop Session (from session context menu)
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.stopSession",
+            "grove.stopSession",
             async (item?: SessionItem) => {
                 if (!item?.session) return;
 
@@ -612,7 +612,7 @@ export async function activate(
     // Stop All Sessions
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.stopAllSessions",
+            "grove.stopAllSessions",
             async () => {
                 const count = sessionTracker.activeCount;
                 if (count === 0) {
@@ -647,7 +647,7 @@ export async function activate(
     // Focus Session Terminal (from session context menu)
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.focusSession",
+            "grove.focusSession",
             (item?: SessionItem) => {
                 if (!item?.session) return;
                 const terminal = sessionTracker.getTerminalForSession(
@@ -667,14 +667,14 @@ export async function activate(
     // Set Task Description (from session context menu)
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.setTaskDescription",
+            "grove.setTaskDescription",
             async (item?: SessionItem) => {
                 if (!item?.session) return;
 
                 const desc = await vscode.window.showInputBox({
                     prompt: "Update task description",
                     value: item.session.taskDescription,
-                    title: "WorkTree Pilot: Task Description",
+                    title: "Grove: Task Description",
                 });
                 if (desc === undefined) return;
 
@@ -693,7 +693,7 @@ export async function activate(
     // Clear Completed Sessions
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.clearCompletedSessions",
+            "grove.clearCompletedSessions",
             () => {
                 sessionTracker.clearCompletedSessions();
             }
@@ -703,7 +703,7 @@ export async function activate(
     // Open in Terminal
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.openInTerminal",
+            "grove.openInTerminal",
             async (item?: WorktreeItem) => {
                 if (!item?.worktree) return;
                 try {
@@ -724,7 +724,7 @@ export async function activate(
     // Open in New Window
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.openInNewWindow",
+            "grove.openInNewWindow",
             async (item?: WorktreeItem) => {
                 if (!item?.worktree) return;
                 try {
@@ -742,7 +742,7 @@ export async function activate(
     // View Diff
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.viewDiff",
+            "grove.viewDiff",
             async (item?: WorktreeItem) => {
                 if (!item?.worktree) return;
                 try {
@@ -751,7 +751,7 @@ export async function activate(
                         item.worktree.path
                     );
                     const config = vscode.workspace.getConfiguration(
-                        "worktreePilot"
+                        "grove"
                     );
                     const baseBranch = config.get<string>(
                         "defaultBaseBranch",
@@ -771,7 +771,7 @@ export async function activate(
     // Refresh Sidebar
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.refreshSidebar",
+            "grove.refreshSidebar",
             () => {
                 refreshAll();
             }
@@ -781,7 +781,7 @@ export async function activate(
     // Open Dashboard
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.openDashboard",
+            "grove.openDashboard",
             () => {
                 DashboardPanel.createOrShow(
                     context.extensionUri,
@@ -795,28 +795,28 @@ export async function activate(
 
     // Quick Menu (status bar click)
     context.subscriptions.push(
-        vscode.commands.registerCommand("worktreePilot.quickMenu", async () => {
+        vscode.commands.registerCommand("grove.quickMenu", async () => {
             try {
                 const items: Array<vscode.QuickPickItem & { commandId: string }> = [
-                    { label: "$(add) Create Worktree", commandId: "worktreePilot.createWorktree" },
-                    { label: "$(organization) Launch Agent Team", commandId: "worktreePilot.launchTeam" },
-                    { label: "$(dashboard) Open Dashboard", commandId: "worktreePilot.openDashboard" },
+                    { label: "$(add) Create Worktree", commandId: "grove.createWorktree" },
+                    { label: "$(organization) Launch Agent Team", commandId: "grove.launchTeam" },
+                    { label: "$(dashboard) Open Dashboard", commandId: "grove.openDashboard" },
                 ];
 
                 if (sessionTracker.activeCount > 0) {
                     items.push(
-                        { label: "$(debug-stop) Stop All Sessions", commandId: "worktreePilot.stopAllSessions" },
+                        { label: "$(debug-stop) Stop All Sessions", commandId: "grove.stopAllSessions" },
                     );
                 }
 
                 items.push(
-                    { label: "$(shield) Check File Overlaps", commandId: "worktreePilot.runOverlapCheck" },
-                    { label: "$(checklist) Generate Merge Report", commandId: "worktreePilot.generateMergeReport" },
-                    { label: "$(merge) Execute Merge Sequence", commandId: "worktreePilot.executeMergeSequence" },
+                    { label: "$(shield) Check File Overlaps", commandId: "grove.runOverlapCheck" },
+                    { label: "$(checklist) Generate Merge Report", commandId: "grove.generateMergeReport" },
+                    { label: "$(merge) Execute Merge Sequence", commandId: "grove.executeMergeSequence" },
                 );
 
                 const picked = await vscode.window.showQuickPick(items, {
-                    placeHolder: `WorkTree Pilot (${sessionTracker.activeCount} active sessions)`,
+                    placeHolder: `Grove (${sessionTracker.activeCount} active sessions)`,
                 });
                 if (picked) {
                     await vscode.commands.executeCommand(picked.commandId);
@@ -835,13 +835,13 @@ export async function activate(
     // Launch Agent Team
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.launchTeam",
+            "grove.launchTeam",
             async () => {
                 try {
-                const config = vscode.workspace.getConfiguration("worktreePilot");
+                const config = vscode.workspace.getConfiguration("grove");
                 const templateDir = config.get<string>(
                     "templateDirectory",
-                    ".worktreepilot/templates"
+                    ".grove/templates"
                 );
 
                 // 1. Pick a template
@@ -849,7 +849,7 @@ export async function activate(
                 if (templateList.length === 0) {
                     void showAutoWarning(
                         "No team templates found. Create one with " +
-                        "'WorkTree Pilot: Create Team Template'."
+                        "'Grove: Create Team Template'."
                     );
                     return;
                 }
@@ -862,7 +862,7 @@ export async function activate(
                     })),
                     {
                         placeHolder: "Select a team template",
-                        title: "WorkTree Pilot: Launch Agent Team",
+                        title: "Grove: Launch Agent Team",
                     }
                 );
                 if (!templatePick) return;
@@ -883,7 +883,7 @@ export async function activate(
                 const taskDescription = await vscode.window.showInputBox({
                     prompt: "What should this team work on?",
                     placeHolder: "e.g., Implement user authentication with JWT and OAuth",
-                    title: "WorkTree Pilot: Task Description",
+                    title: "Grove: Task Description",
                 });
                 if (taskDescription === undefined) return;
 
@@ -891,7 +891,7 @@ export async function activate(
                 const teamName = await vscode.window.showInputBox({
                     prompt: "Team name (used for branch naming)",
                     placeHolder: "e.g., auth-feature",
-                    title: "WorkTree Pilot: Team Name",
+                    title: "Grove: Team Name",
                     validateInput: (value) => {
                         if (!value) return "Team name is required.";
                         if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(value)) {
@@ -998,7 +998,7 @@ export async function activate(
     // Stop Team (from team context menu)
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.stopTeam",
+            "grove.stopTeam",
             async (item?: { team?: { id: string; name: string } }) => {
                 const teamId = item?.team?.id;
                 if (!teamId) return;
@@ -1026,7 +1026,7 @@ export async function activate(
     // Stop Agent (from agent context menu in team tree)
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.stopAgent",
+            "grove.stopAgent",
             async (item?: AgentItem) => {
                 if (!item?.agentState || !item.teamId) return;
 
@@ -1046,7 +1046,7 @@ export async function activate(
     // Focus Agent Terminal (from agent context menu in team tree)
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.focusAgent",
+            "grove.focusAgent",
             (item?: AgentItem) => {
                 if (!item?.agentState?.sessionId) return;
 
@@ -1067,7 +1067,7 @@ export async function activate(
     // Cleanup Team (remove worktrees after merge)
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.cleanupTeam",
+            "grove.cleanupTeam",
             async (item?: { team?: { id: string; name: string } }) => {
                 const teamId = item?.team?.id;
                 if (!teamId) return;
@@ -1104,7 +1104,7 @@ export async function activate(
     // Run Overlap Check (manual scan)
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.runOverlapCheck",
+            "grove.runOverlapCheck",
             async () => {
                 try {
                 const activeSessions = sessionTracker.getActiveSessions();
@@ -1122,7 +1122,7 @@ export async function activate(
                         cancellable: false,
                     },
                     async () => {
-                        const config = vscode.workspace.getConfiguration("worktreePilot");
+                        const config = vscode.workspace.getConfiguration("grove");
                         const baseBranch = config.get<string>("defaultBaseBranch", "main");
 
                         await overlapDetector.scanExistingChanges(
@@ -1169,7 +1169,7 @@ export async function activate(
     // Generate Merge Report
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.generateMergeReport",
+            "grove.generateMergeReport",
             async () => {
                 try {
                 const worktrees = await listAllWorktrees(repoRoot);
@@ -1193,13 +1193,13 @@ export async function activate(
                     })),
                     {
                         placeHolder: "Select worktrees to include in merge report",
-                        title: "WorkTree Pilot: Merge Report",
+                        title: "Grove: Merge Report",
                         canPickMany: true,
                     }
                 );
                 if (!picks || picks.length === 0) return;
 
-                const config = vscode.workspace.getConfiguration("worktreePilot");
+                const config = vscode.workspace.getConfiguration("grove");
                 const baseBranch = config.get<string>("defaultBaseBranch", "main");
 
                 const report = await vscode.window.withProgress(
@@ -1246,7 +1246,7 @@ export async function activate(
     // Execute Merge Sequence
     context.subscriptions.push(
         vscode.commands.registerCommand(
-            "worktreePilot.executeMergeSequence",
+            "grove.executeMergeSequence",
             async () => {
                 try {
                 const worktrees = await listAllWorktrees(repoRoot);
@@ -1270,13 +1270,13 @@ export async function activate(
                     })),
                     {
                         placeHolder: "Select worktrees to merge (in order)",
-                        title: "WorkTree Pilot: Merge Sequence",
+                        title: "Grove: Merge Sequence",
                         canPickMany: true,
                     }
                 );
                 if (!picks || picks.length === 0) return;
 
-                const config = vscode.workspace.getConfiguration("worktreePilot");
+                const config = vscode.workspace.getConfiguration("grove");
                 const baseBranch = config.get<string>("defaultBaseBranch", "main");
 
                 // Detect test command
@@ -1293,7 +1293,7 @@ export async function activate(
                           ],
                           {
                               placeHolder: "Run tests after each merge?",
-                              title: "WorkTree Pilot: Test After Merge",
+                              title: "Grove: Test After Merge",
                           }
                       ))?.value ?? false
                     : false;
@@ -1328,7 +1328,7 @@ export async function activate(
                             const staged = await git(["diff", "--cached", "--name-only"], wtPath);
                             if (staged.trim().length > 0) {
                                 await gitWrite(
-                                    ["commit", "-m", "WorkTree Pilot: auto-commit agent changes"],
+                                    ["commit", "-m", "Grove: auto-commit agent changes"],
                                     wtPath
                                 );
                                 log(`Auto-committed changes in ${pick.worktree.branch}`);
@@ -1567,7 +1567,7 @@ export async function activate(
     // Initial status bar update
     await updateStatusBar();
 
-    log("WorkTree Pilot activated successfully");
+    log("Grove activated successfully");
 }
 
 export function deactivate(): void {

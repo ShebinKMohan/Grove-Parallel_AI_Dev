@@ -1,4 +1,4 @@
-# WorkTree Pilot — Complete Documentation
+# Grove — Complete Documentation
 
 > **Version:** 0.2.0
 > **Type:** VS Code / Cursor Extension
@@ -9,7 +9,7 @@
 ## Table of Contents
 
 1. [Problem Statement](#problem-statement)
-2. [What WorkTree Pilot Is](#what-worktree-pilot-is)
+2. [What Grove Is](#what-grove-is)
 3. [The Bridge — How It Connects Everything](#the-bridge)
 4. [Architecture Overview](#architecture-overview)
 5. [Installation & Setup](#installation--setup)
@@ -50,9 +50,9 @@ When you have a feature that spans backend, frontend, and tests — you either w
 
 ---
 
-## What WorkTree Pilot Is
+## What Grove Is
 
-WorkTree Pilot is the **control plane for parallel AI development**. It wraps git worktrees, Claude Code sessions, and the Agent Teams protocol into a single, IDE-native experience.
+Grove is the **control plane for parallel AI development**. It wraps git worktrees, Claude Code sessions, and the Agent Teams protocol into a single, IDE-native experience.
 
 Think of it as **"Docker Desktop for AI coding agents"** — you don't replace Claude Code, you wrap it with visibility, safety, and one-click orchestration.
 
@@ -72,7 +72,7 @@ Think of it as **"Docker Desktop for AI coding agents"** — you don't replace C
 
 ## The Bridge
 
-WorkTree Pilot bridges three things that currently exist in isolation:
+Grove bridges three things that currently exist in isolation:
 
 ```
 ┌─────────────────┐     ┌────────────────────┐     ┌─────────────────────┐
@@ -85,7 +85,7 @@ WorkTree Pilot bridges three things that currently exist in isolation:
          └────────────────────────┼──────────────────────────┘
                                   │
                      ┌────────────▼────────────┐
-                     │    WorkTree Pilot        │
+                     │    Grove        │
                      │                         │
                      │  • Creates worktrees    │
                      │  • Spawns sessions      │
@@ -96,7 +96,7 @@ WorkTree Pilot bridges three things that currently exist in isolation:
                      └─────────────────────────┘
 ```
 
-**Without WorkTree Pilot:**
+**Without Grove:**
 ```
 Terminal 1:  git worktree add .claude/worktrees/backend -b feat-backend
 Terminal 2:  git worktree add .claude/worktrees/frontend -b feat-frontend
@@ -106,7 +106,7 @@ Terminal 5:  # Manually check if they edited the same files
 Terminal 6:  git merge feat-backend && git merge feat-frontend  # hope for the best
 ```
 
-**With WorkTree Pilot:**
+**With Grove:**
 ```
 Sidebar:  Click "+" → name it → worktree created
 Sidebar:  Click rocket icon → Claude launches in it
@@ -120,7 +120,7 @@ Sidebar:  Click "Execute Merge" → sequential safe merge
 ## Architecture Overview
 
 ```
-worktree-pilot/
+grove/
 ├── src/
 │   ├── extension.ts                         # Entry point — registers commands, views, lifecycle
 │   ├── core/
@@ -150,7 +150,7 @@ worktree-pilot/
 - Core modules have no VS Code dependency — they work with plain git and filesystem
 - Git write operations are serialized through a mutex to prevent lock conflicts
 - File watchers are debounced (500ms default) to handle rapid AI agent writes
-- State persists to `.worktreepilot/sessions.json` across VS Code restarts
+- State persists to `.grove/sessions.json` across VS Code restarts
 - WebView communicates with the extension via typed message passing
 
 ---
@@ -165,14 +165,14 @@ worktree-pilot/
 
 ### Install the Extension
 ```bash
-code --install-extension worktree-pilot-0.2.0.vsix --force
+code --install-extension grove-0.2.0.vsix --force
 ```
 
 ### First Launch
 1. Open any git repository in VS Code / Cursor
-2. The WorkTree Pilot icon appears in the Activity Bar (left sidebar)
+2. The Grove icon appears in the Activity Bar (left sidebar)
 3. Click it to open the sidebar — you'll see the welcome screen with quick-start buttons
-4. The status bar (bottom) shows a `$(layers) WorkTree Pilot` quick menu
+4. The status bar (bottom) shows a `$(layers) Grove` quick menu
 
 No additional configuration is needed. The extension auto-detects your git setup, package manager, and test commands.
 
@@ -184,7 +184,7 @@ No additional configuration is needed. The extension auto-detects your git setup
 
 | Icon | Location | Purpose |
 |------|----------|---------|
-| Layers icon (custom SVG) | Activity Bar (left edge) | Opens the WorkTree Pilot sidebar |
+| Layers icon (custom SVG) | Activity Bar (left edge) | Opens the Grove sidebar |
 
 ### Sidebar Title Bar Buttons
 
@@ -279,7 +279,7 @@ Change indicators: `!N` conflicts, `+N` staged, `~N` modified, `?N` untracked
 
 | Icon | Location | Action |
 |------|----------|--------|
-| `$(layers)` WorkTree Pilot | Bottom status bar | Opens Quick Menu with all commands |
+| `$(layers)` Grove | Bottom status bar | Opens Quick Menu with all commands |
 
 ### Dashboard Tabs
 
@@ -334,9 +334,9 @@ Step 4 ─ Review
   → See all changes vs main branch
 
 Step 5 ─ Merge
-  Command Palette: "WorkTree Pilot: Generate Merge Report"
+  Command Palette: "Grove: Generate Merge Report"
   → Review file counts, changes summary
-  Command Palette: "WorkTree Pilot: Execute Merge Sequence"
+  Command Palette: "Grove: Execute Merge Sequence"
   → Auto-commits uncommitted work
   → Merges into main
   → Runs tests (if configured)
@@ -395,13 +395,13 @@ Step 5 ─ Handle Overlaps (if any)
 
 Step 6 ─ Generate Merge Report
   When workflow hint says "All sessions complete — Generate Merge Report":
-  Command Palette: "WorkTree Pilot: Generate Merge Report"
+  Command Palette: "Grove: Generate Merge Report"
   → Shows per-agent stats: files changed, lines added/removed
   → Shows overlapping files with resolution guidance
   → Shows recommended merge order (types → core → API → UI → tests)
 
 Step 7 ─ Execute Merge Sequence
-  Command Palette: "WorkTree Pilot: Execute Merge Sequence"
+  Command Palette: "Grove: Execute Merge Sequence"
   → Auto-commits uncommitted changes in each worktree
   → Merges agents in recommended order:
      1. Backend first (defines models and APIs)
@@ -495,7 +495,7 @@ Step 4 ─ Cleanup
 - Terminal instance reference
 
 **Persistence:**
-- Sessions saved to `.worktreepilot/sessions.json`
+- Sessions saved to `.grove/sessions.json`
 - Restored on VS Code restart (running sessions marked as completed)
 - Last 5 completed sessions shown under "Recent" in sidebar
 
@@ -525,7 +525,7 @@ Before any worktree is created, the system:
 Each agent gets a tailored instruction file containing:
 
 ```
-# WorkTree Pilot — Agent Session
+# Grove — Agent Session
 Team: login-feature | Role: Backend Architect
 ───────────────────────────────────────
 
@@ -554,7 +554,7 @@ DO NOT directly modify shared files. Instead, document changes in SHARED-CHANGES
 If you need changes in files you don't own, create HANDOFF.md.
 
 ## Project Conventions
-[Pulled from .worktreepilot/config.json]
+[Pulled from .grove/config.json]
 ```
 
 **Team Status Sync:**
@@ -750,7 +750,7 @@ Sequential merge order preserves dependency chains.
 **Estimated tokens:** 100K–200K
 
 ### Custom Templates
-Create your own templates at `.worktreepilot/templates/<name>.json`:
+Create your own templates at `.grove/templates/<name>.json`:
 
 ```json
 {
@@ -771,7 +771,7 @@ Create your own templates at `.worktreepilot/templates/<name>.json`:
 }
 ```
 
-Project templates override global templates (`~/.worktreepilot/templates/`), which override built-in templates.
+Project templates override global templates (`~/.grove/templates/`), which override built-in templates.
 
 ---
 
@@ -781,26 +781,26 @@ Project templates override global templates (`~/.worktreepilot/templates/`), whi
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `worktreePilot.defaultBaseBranch` | string | `"main"` | Base branch for comparisons and new worktrees |
-| `worktreePilot.autoInstallDependencies` | boolean | `true` | Install dependencies after creating worktrees |
-| `worktreePilot.packageManager` | enum | `"auto"` | Package manager: auto, npm, yarn, pnpm, pip, poetry |
-| `worktreePilot.worktreeLocation` | string | `".claude/worktrees"` | Directory for worktrees (relative to repo root) |
-| `worktreePilot.enableAgentTeams` | boolean | `true` | Enable Agent Teams features |
-| `worktreePilot.templateDirectory` | string | `".worktreepilot/templates"` | Directory for team templates |
-| `worktreePilot.testCommand` | string | `""` | Test command for merge steps (auto-detected if empty) |
-| `worktreePilot.maxConcurrentSessions` | number | `5` | Maximum concurrent Claude Code sessions |
-| `worktreePilot.showTokenEstimates` | boolean | `true` | Show token cost estimates before team launch |
-| `worktreePilot.fileWatcherDebounce` | number | `500` | Debounce interval (ms) for file change events |
-| `worktreePilot.notifyOnSessionComplete` | boolean | `true` | Show notification when sessions finish |
-| `worktreePilot.autoGitignore` | boolean | `true` | Auto-add worktree paths to .gitignore |
-| `worktreePilot.showStatusBarItem` | boolean | `true` | Show quick menu in status bar |
-| `worktreePilot.protectedBranches` | array | `["main", "master", "develop", "production"]` | Branches that cannot be deleted |
+| `grove.defaultBaseBranch` | string | `"main"` | Base branch for comparisons and new worktrees |
+| `grove.autoInstallDependencies` | boolean | `true` | Install dependencies after creating worktrees |
+| `grove.packageManager` | enum | `"auto"` | Package manager: auto, npm, yarn, pnpm, pip, poetry |
+| `grove.worktreeLocation` | string | `".claude/worktrees"` | Directory for worktrees (relative to repo root) |
+| `grove.enableAgentTeams` | boolean | `true` | Enable Agent Teams features |
+| `grove.templateDirectory` | string | `".grove/templates"` | Directory for team templates |
+| `grove.testCommand` | string | `""` | Test command for merge steps (auto-detected if empty) |
+| `grove.maxConcurrentSessions` | number | `5` | Maximum concurrent Claude Code sessions |
+| `grove.showTokenEstimates` | boolean | `true` | Show token cost estimates before team launch |
+| `grove.fileWatcherDebounce` | number | `500` | Debounce interval (ms) for file change events |
+| `grove.notifyOnSessionComplete` | boolean | `true` | Show notification when sessions finish |
+| `grove.autoGitignore` | boolean | `true` | Auto-add worktree paths to .gitignore |
+| `grove.showStatusBarItem` | boolean | `true` | Show quick menu in status bar |
+| `grove.protectedBranches` | array | `["main", "master", "develop", "production"]` | Branches that cannot be deleted |
 
 ---
 
 ## Project-Level Configuration
 
-Create `.worktreepilot/config.json` in your repo root for project-specific settings:
+Create `.grove/config.json` in your repo root for project-specific settings:
 
 ```json
 {
@@ -840,7 +840,7 @@ Create `.worktreepilot/config.json` in your repo root for project-specific setti
 - **Check the Overlaps tab** periodically during team runs. Early detection saves hours of merge conflict resolution.
 - **Use the merge report** before executing merges. It tells you exactly what will happen and highlights potential conflicts.
 - **Use Code Review Team** for important PRs. Three perspectives (security, performance, architecture) catch things humans miss.
-- **Set up `.worktreepilot/config.json`** for your project. Convention info helps agents write code that matches your project's patterns.
+- **Set up `.grove/config.json`** for your project. Convention info helps agents write code that matches your project's patterns.
 - **Use the workflow hints** in the sidebar. They guide you to the logical next step.
 
 ### Don't
@@ -858,8 +858,8 @@ Create `.worktreepilot/config.json` in your repo root for project-specific setti
 
 ### "No team templates found"
 The extension looks for templates in three locations (in order):
-1. Project: `.worktreepilot/templates/` in your repo
-2. Global: `~/.worktreepilot/templates/`
+1. Project: `.grove/templates/` in your repo
+2. Global: `~/.grove/templates/`
 3. Built-in: shipped with the extension
 
 If none are found, the extension's `templates/` directory may not be in the VSIX. Rebuild with `npm run package`.
@@ -893,12 +893,12 @@ All commands are available via `Cmd+Shift+P` (macOS) or `Ctrl+Shift+P` (Windows/
 
 | Command | When to Use |
 |---------|-------------|
-| `WorkTree Pilot: Create Worktree` | Create a new isolated worktree |
-| `WorkTree Pilot: Launch Agent Team` | Deploy a coordinated team of agents |
-| `WorkTree Pilot: Open Dashboard` | Open the real-time monitoring panel |
-| `WorkTree Pilot: Check File Overlaps` | Manually trigger overlap scan |
-| `WorkTree Pilot: Generate Merge Report` | Analyze merge readiness across worktrees |
-| `WorkTree Pilot: Execute Merge Sequence` | Run the guided merge process |
-| `WorkTree Pilot: Cleanup Stale Worktrees` | Find and remove idle worktrees |
-| `WorkTree Pilot: Stop All Sessions` | Close all active Claude Code terminals |
-| `WorkTree Pilot: Quick Menu` | Open the status bar quick menu |
+| `Grove: Create Worktree` | Create a new isolated worktree |
+| `Grove: Launch Agent Team` | Deploy a coordinated team of agents |
+| `Grove: Open Dashboard` | Open the real-time monitoring panel |
+| `Grove: Check File Overlaps` | Manually trigger overlap scan |
+| `Grove: Generate Merge Report` | Analyze merge readiness across worktrees |
+| `Grove: Execute Merge Sequence` | Run the guided merge process |
+| `Grove: Cleanup Stale Worktrees` | Find and remove idle worktrees |
+| `Grove: Stop All Sessions` | Close all active Claude Code terminals |
+| `Grove: Quick Menu` | Open the status bar quick menu |

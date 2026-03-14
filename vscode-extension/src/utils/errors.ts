@@ -3,19 +3,19 @@
  * Every error shown to users includes a fix command.
  */
 
-export class WorktreePilotError extends Error {
+export class GroveError extends Error {
     public readonly fix: string;
     public readonly originalError?: Error;
 
     constructor(message: string, fix: string, originalError?: Error) {
         super(message);
-        this.name = "WorktreePilotError";
+        this.name = "GroveError";
         this.fix = fix;
         this.originalError = originalError;
     }
 }
 
-export class BranchAlreadyCheckedOutError extends WorktreePilotError {
+export class BranchAlreadyCheckedOutError extends GroveError {
     constructor(branch: string) {
         super(
             `Branch '${branch}' is already checked out in another worktree.`,
@@ -25,7 +25,7 @@ export class BranchAlreadyCheckedOutError extends WorktreePilotError {
     }
 }
 
-export class WorktreePathExistsError extends WorktreePilotError {
+export class WorktreePathExistsError extends GroveError {
     constructor(path: string) {
         super(
             `Path '${path}' already exists.`,

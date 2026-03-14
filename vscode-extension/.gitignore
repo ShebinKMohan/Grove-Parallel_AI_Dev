@@ -3,6 +3,6 @@ out/
 webview-ui/dist/
 webview-ui/node_modules/
 *.vsix
-.worktreepilot/
+.grove/
 .claude/worktrees/
 .vscode-test/

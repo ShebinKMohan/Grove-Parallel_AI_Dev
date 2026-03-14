@@ -38,7 +38,7 @@ describe("session-tracker data model", () => {
                 status: "running" as const,
             };
 
-            const sessionsDir = path.join(tmpDir, ".worktreepilot");
+            const sessionsDir = path.join(tmpDir, ".grove");
             fs.mkdirSync(sessionsDir, { recursive: true });
             const sessionsFile = path.join(sessionsDir, "sessions.json");
             fs.writeFileSync(
@@ -77,7 +77,7 @@ describe("session-tracker data model", () => {
                 },
             ];
 
-            const sessionsDir = path.join(tmpDir, ".worktreepilot");
+            const sessionsDir = path.join(tmpDir, ".grove");
             fs.mkdirSync(sessionsDir, { recursive: true });
             const sessionsFile = path.join(sessionsDir, "sessions.json");
             fs.writeFileSync(

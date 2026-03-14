@@ -88,7 +88,7 @@ export class WorkflowHintItem extends vscode.TreeItem {
             case "no-worktrees":
                 return {
                     label: "Create a worktree to get started",
-                    commandId: "worktreePilot.createWorktree",
+                    commandId: "grove.createWorktree",
                     commandTitle: "Create Worktree",
                     icon: "add",
                     color: "charts.green",
@@ -96,7 +96,7 @@ export class WorkflowHintItem extends vscode.TreeItem {
             case "no-sessions":
                 return {
                     label: "Launch Claude Code in your worktrees",
-                    commandId: "worktreePilot.openDashboard",
+                    commandId: "grove.openDashboard",
                     commandTitle: "Open Dashboard",
                     icon: "rocket",
                     color: "charts.blue",
@@ -104,7 +104,7 @@ export class WorkflowHintItem extends vscode.TreeItem {
             case "sessions-running":
                 return {
                     label: `${sessionCount} session${sessionCount === 1 ? "" : "s"} running \u2014 Open Dashboard`,
-                    commandId: "worktreePilot.openDashboard",
+                    commandId: "grove.openDashboard",
                     commandTitle: "Open Dashboard",
                     icon: "pulse",
                     color: "charts.green",
@@ -112,7 +112,7 @@ export class WorkflowHintItem extends vscode.TreeItem {
             case "all-done":
                 return {
                     label: "All done \u2014 Generate Merge Report",
-                    commandId: "worktreePilot.generateMergeReport",
+                    commandId: "grove.generateMergeReport",
                     commandTitle: "Generate Merge Report",
                     icon: "check-all",
                     color: "charts.purple",

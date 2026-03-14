@@ -1,6 +1,6 @@
 /**
  * Configuration manager — reads/writes extension and project-level configs.
- * Project config is stored in .worktreepilot/config.json.
+ * Project config is stored in .grove/config.json.
  */
 
 import * as fs from "fs";
@@ -19,11 +19,11 @@ export interface ProjectConfig {
     defaultTemplate?: string;
 }
 
-const CONFIG_DIR = ".worktreepilot";
+const CONFIG_DIR = ".grove";
 const CONFIG_FILE = "config.json";
 
 /**
- * Find and load the project config from .worktreepilot/config.json.
+ * Find and load the project config from .grove/config.json.
  * Searches upward from the given directory.
  */
 export function loadProjectConfig(repoRoot: string): ProjectConfig | null {

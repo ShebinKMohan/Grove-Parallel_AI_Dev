@@ -17,7 +17,7 @@ import { ensureGitignored } from "./gitignore";
 import { installDependencies, type PackageManager } from "../utils/package-manager";
 import { log } from "../utils/logger";
 import {
-    WorktreePilotError,
+    GroveError,
     BranchAlreadyCheckedOutError,
     WorktreePathExistsError,
 } from "../utils/errors";
@@ -370,7 +370,7 @@ export async function removeWorktree(
     try {
         await gitWrite(args, repoRoot);
     } catch (err) {
-        throw new WorktreePilotError(
+        throw new GroveError(
             `Failed to remove worktree at ${wtPath}.`,
             "If it has uncommitted changes, use force removal.",
             err instanceof Error ? err : undefined
@@ -453,7 +453,7 @@ function throwFriendlyWorktreeError(
     if (msg.includes("already exists")) {
         throw new WorktreePathExistsError(wtPath);
     }
-    throw new WorktreePilotError(
+    throw new GroveError(
         `Failed to create worktree for branch '${branch}' at ${wtPath}.`,
         `Original error: ${msg}`,
         err instanceof Error ? err : undefined

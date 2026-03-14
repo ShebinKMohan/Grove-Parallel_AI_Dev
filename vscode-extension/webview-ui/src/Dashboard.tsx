@@ -86,7 +86,7 @@ export function Dashboard() {
     return (
         <div className="dashboard">
             <header className="dashboard-header">
-                <h1>WorkTree Pilot</h1>
+                <h1>Grove</h1>
                 <WorktreeStatus
                     worktrees={worktrees}
                     activeSessions={activeSessions.length}

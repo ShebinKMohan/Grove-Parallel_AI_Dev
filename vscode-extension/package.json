@@ -1,10 +1,14 @@
 {
-  "name": "worktree-pilot",
-  "displayName": "WorkTree Pilot",
+  "name": "grove",
+  "displayName": "Grove",
   "description": "Control plane for parallel AI development — git worktree management, Claude Code session orchestration, and merge intelligence",
   "version": "0.2.0",
-  "publisher": "worktree-pilot",
+  "publisher": "grove",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ShebinKMohan/WorkTree_Pilot"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -27,163 +31,163 @@
   "contributes": {
     "commands": [
       {
-        "command": "worktreePilot.createWorktree",
+        "command": "grove.createWorktree",
         "title": "Create Worktree",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(add)"
       },
       {
-        "command": "worktreePilot.deleteWorktree",
+        "command": "grove.deleteWorktree",
         "title": "Delete Worktree",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(trash)"
       },
       {
-        "command": "worktreePilot.cleanupWorktrees",
+        "command": "grove.cleanupWorktrees",
         "title": "Cleanup Stale Worktrees",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(trash)"
       },
       {
-        "command": "worktreePilot.launchSession",
+        "command": "grove.launchSession",
         "title": "Launch Claude Code in Worktree",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(rocket)"
       },
       {
-        "command": "worktreePilot.openDashboard",
+        "command": "grove.openDashboard",
         "title": "Open Dashboard",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(dashboard)"
       },
       {
-        "command": "worktreePilot.openInTerminal",
+        "command": "grove.openInTerminal",
         "title": "Open in Terminal",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(terminal)"
       },
       {
-        "command": "worktreePilot.openInNewWindow",
+        "command": "grove.openInNewWindow",
         "title": "Open in New Window",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(multiple-windows)"
       },
       {
-        "command": "worktreePilot.viewDiff",
+        "command": "grove.viewDiff",
         "title": "View Diff",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(diff)"
       },
       {
-        "command": "worktreePilot.stopSession",
+        "command": "grove.stopSession",
         "title": "Stop Session",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(debug-stop)"
       },
       {
-        "command": "worktreePilot.stopAllSessions",
+        "command": "grove.stopAllSessions",
         "title": "Stop All Sessions",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(debug-stop)"
       },
       {
-        "command": "worktreePilot.focusSession",
+        "command": "grove.focusSession",
         "title": "Open Session Terminal",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(terminal)"
       },
       {
-        "command": "worktreePilot.setTaskDescription",
+        "command": "grove.setTaskDescription",
         "title": "Set Task Description",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(edit)"
       },
       {
-        "command": "worktreePilot.clearCompletedSessions",
+        "command": "grove.clearCompletedSessions",
         "title": "Clear Completed Sessions",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(clear-all)"
       },
       {
-        "command": "worktreePilot.refreshSidebar",
+        "command": "grove.refreshSidebar",
         "title": "Refresh",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(refresh)"
       },
       {
-        "command": "worktreePilot.launchTeam",
+        "command": "grove.launchTeam",
         "title": "Launch Agent Team",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(organization)"
       },
       {
-        "command": "worktreePilot.stopTeam",
+        "command": "grove.stopTeam",
         "title": "Stop Team",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(debug-stop)"
       },
       {
-        "command": "worktreePilot.stopAgent",
+        "command": "grove.stopAgent",
         "title": "Stop Agent",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(debug-stop)"
       },
       {
-        "command": "worktreePilot.focusAgent",
+        "command": "grove.focusAgent",
         "title": "Open Agent Terminal",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(terminal)"
       },
       {
-        "command": "worktreePilot.cleanupTeam",
+        "command": "grove.cleanupTeam",
         "title": "Cleanup Team Worktrees",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(trash)"
       },
       {
-        "command": "worktreePilot.runOverlapCheck",
+        "command": "grove.runOverlapCheck",
         "title": "Check File Overlaps",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(shield)"
       },
       {
-        "command": "worktreePilot.generateMergeReport",
+        "command": "grove.generateMergeReport",
         "title": "Generate Merge Report",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(checklist)"
       },
       {
-        "command": "worktreePilot.executeMergeSequence",
+        "command": "grove.executeMergeSequence",
         "title": "Execute Merge Sequence",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(merge)"
       },
       {
-        "command": "worktreePilot.quickMenu",
+        "command": "grove.quickMenu",
         "title": "Quick Menu",
-        "category": "WorkTree Pilot",
+        "category": "Grove",
         "icon": "$(layers)"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "worktreePilot",
-          "title": "WorkTree Pilot",
+          "id": "grove",
+          "title": "Grove",
           "icon": "media/icon.svg"
         }
       ]
     },
     "views": {
-      "worktreePilot": [
+      "grove": [
         {
-          "id": "worktreePilot.explorer",
-          "name": "WorkTree Pilot",
-          "contextualTitle": "WorkTree Pilot",
+          "id": "grove.explorer",
+          "name": "Grove",
+          "contextualTitle": "Grove",
           "visibility": "visible"
         },
         {
-          "id": "worktreePilot.completed",
+          "id": "grove.completed",
           "name": "Completed",
           "contextualTitle": "Completed Sessions & Teams",
           "visibility": "collapsed"
@@ -192,193 +196,193 @@
     },
     "viewsWelcome": [
       {
-        "view": "worktreePilot.explorer",
-        "contents": "Welcome to WorkTree Pilot!\n\nGet started with parallel AI development:\n\n[Create Worktree](command:worktreePilot.createWorktree)\n[Launch Agent Team](command:worktreePilot.launchTeam)\n[Open Dashboard](command:worktreePilot.openDashboard)"
+        "view": "grove.explorer",
+        "contents": "Welcome to Grove!\n\nGet started with parallel AI development:\n\n[Create Worktree](command:grove.createWorktree)\n[Launch Agent Team](command:grove.launchTeam)\n[Open Dashboard](command:grove.openDashboard)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "worktreePilot.createWorktree",
-          "when": "view == worktreePilot.explorer",
+          "command": "grove.createWorktree",
+          "when": "view == grove.explorer",
           "group": "navigation@1"
         },
         {
-          "command": "worktreePilot.launchTeam",
-          "when": "view == worktreePilot.explorer",
+          "command": "grove.launchTeam",
+          "when": "view == grove.explorer",
           "group": "navigation@2"
         },
         {
-          "command": "worktreePilot.openDashboard",
-          "when": "view == worktreePilot.explorer",
+          "command": "grove.openDashboard",
+          "when": "view == grove.explorer",
           "group": "navigation@3"
         },
         {
-          "command": "worktreePilot.clearCompletedSessions",
-          "when": "view == worktreePilot.completed",
+          "command": "grove.clearCompletedSessions",
+          "when": "view == grove.completed",
           "group": "navigation@1"
         },
         {
-          "command": "worktreePilot.refreshSidebar",
-          "when": "view == worktreePilot.explorer",
+          "command": "grove.refreshSidebar",
+          "when": "view == grove.explorer",
           "group": "navigation@4"
         }
       ],
       "view/item/context": [
         {
-          "command": "worktreePilot.launchSession",
+          "command": "grove.launchSession",
           "when": "viewItem == worktree || viewItem == worktree-main",
           "group": "inline@1"
         },
         {
-          "command": "worktreePilot.openInTerminal",
+          "command": "grove.openInTerminal",
           "when": "viewItem == worktree || viewItem == worktree-main || viewItem == worktree-with-session",
           "group": "inline@2"
         },
         {
-          "command": "worktreePilot.openInNewWindow",
+          "command": "grove.openInNewWindow",
           "when": "viewItem == worktree || viewItem == worktree-main || viewItem == worktree-with-session",
           "group": "1_open"
         },
         {
-          "command": "worktreePilot.launchSession",
+          "command": "grove.launchSession",
           "when": "viewItem == worktree || viewItem == worktree-main",
           "group": "1_open"
         },
         {
-          "command": "worktreePilot.viewDiff",
+          "command": "grove.viewDiff",
           "when": "viewItem == worktree || viewItem == worktree-main || viewItem == worktree-with-session",
           "group": "2_inspect"
         },
         {
-          "command": "worktreePilot.deleteWorktree",
+          "command": "grove.deleteWorktree",
           "when": "viewItem == worktree || viewItem == worktree-with-session",
           "group": "3_manage"
         },
         {
-          "command": "worktreePilot.focusSession",
+          "command": "grove.focusSession",
           "when": "viewItem == session-active",
           "group": "inline@1"
         },
         {
-          "command": "worktreePilot.stopSession",
+          "command": "grove.stopSession",
           "when": "viewItem == session-active",
           "group": "inline@2"
         },
         {
-          "command": "worktreePilot.setTaskDescription",
+          "command": "grove.setTaskDescription",
           "when": "viewItem == session-active || viewItem == session-completed",
           "group": "1_session"
         },
         {
-          "command": "worktreePilot.stopTeam",
+          "command": "grove.stopTeam",
           "when": "viewItem == team-active",
           "group": "inline@1"
         },
         {
-          "command": "worktreePilot.cleanupTeam",
+          "command": "grove.cleanupTeam",
           "when": "viewItem == team-completed",
           "group": "inline@1"
         },
         {
-          "command": "worktreePilot.stopTeam",
+          "command": "grove.stopTeam",
           "when": "viewItem == team-active",
           "group": "1_team"
         },
         {
-          "command": "worktreePilot.cleanupTeam",
+          "command": "grove.cleanupTeam",
           "when": "viewItem == team-active || viewItem == team-completed",
           "group": "2_team"
         },
         {
-          "command": "worktreePilot.focusAgent",
+          "command": "grove.focusAgent",
           "when": "viewItem == agent-active",
           "group": "inline@1"
         },
         {
-          "command": "worktreePilot.stopAgent",
+          "command": "grove.stopAgent",
           "when": "viewItem == agent-active",
           "group": "inline@2"
         },
         {
-          "command": "worktreePilot.cleanupTeam",
-          "when": "viewItem == team-completed && view == worktreePilot.completed",
+          "command": "grove.cleanupTeam",
+          "when": "viewItem == team-completed && view == grove.completed",
           "group": "inline@1"
         }
       ],
       "commandPalette": [
         {
-          "command": "worktreePilot.openInTerminal",
+          "command": "grove.openInTerminal",
           "when": "false"
         },
         {
-          "command": "worktreePilot.openInNewWindow",
+          "command": "grove.openInNewWindow",
           "when": "false"
         },
         {
-          "command": "worktreePilot.launchSession",
+          "command": "grove.launchSession",
           "when": "false"
         },
         {
-          "command": "worktreePilot.deleteWorktree",
+          "command": "grove.deleteWorktree",
           "when": "false"
         },
         {
-          "command": "worktreePilot.viewDiff",
+          "command": "grove.viewDiff",
           "when": "false"
         },
         {
-          "command": "worktreePilot.refreshSidebar",
+          "command": "grove.refreshSidebar",
           "when": "false"
         },
         {
-          "command": "worktreePilot.stopSession",
+          "command": "grove.stopSession",
           "when": "false"
         },
         {
-          "command": "worktreePilot.focusSession",
+          "command": "grove.focusSession",
           "when": "false"
         },
         {
-          "command": "worktreePilot.setTaskDescription",
+          "command": "grove.setTaskDescription",
           "when": "false"
         },
         {
-          "command": "worktreePilot.clearCompletedSessions",
+          "command": "grove.clearCompletedSessions",
           "when": "false"
         },
         {
-          "command": "worktreePilot.stopTeam",
+          "command": "grove.stopTeam",
           "when": "false"
         },
         {
-          "command": "worktreePilot.stopAgent",
+          "command": "grove.stopAgent",
           "when": "false"
         },
         {
-          "command": "worktreePilot.focusAgent",
+          "command": "grove.focusAgent",
           "when": "false"
         },
         {
-          "command": "worktreePilot.cleanupTeam",
+          "command": "grove.cleanupTeam",
           "when": "false"
         }
       ]
     },
     "configuration": {
-      "title": "WorkTree Pilot",
+      "title": "Grove",
       "properties": {
-        "worktreePilot.defaultBaseBranch": {
+        "grove.defaultBaseBranch": {
           "type": "string",
           "default": "main",
           "description": "Default base branch for comparisons and new worktrees"
         },
-        "worktreePilot.autoInstallDependencies": {
+        "grove.autoInstallDependencies": {
           "type": "boolean",
           "default": true,
           "description": "Automatically install dependencies after creating a worktree"
         },
-        "worktreePilot.packageManager": {
+        "grove.packageManager": {
           "type": "string",
           "default": "auto",
           "enum": [
@@ -391,57 +395,57 @@
           ],
           "description": "Package manager to use for dependency installation"
         },
-        "worktreePilot.worktreeLocation": {
+        "grove.worktreeLocation": {
           "type": "string",
           "default": ".claude/worktrees",
           "description": "Directory for worktrees relative to the repo root"
         },
-        "worktreePilot.enableAgentTeams": {
+        "grove.enableAgentTeams": {
           "type": "boolean",
           "default": true,
           "description": "Enable Agent Teams features (sets CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS)"
         },
-        "worktreePilot.templateDirectory": {
+        "grove.templateDirectory": {
           "type": "string",
-          "default": ".worktreepilot/templates",
+          "default": ".grove/templates",
           "description": "Directory for team templates relative to the repo root"
         },
-        "worktreePilot.testCommand": {
+        "grove.testCommand": {
           "type": "string",
           "default": "",
           "description": "Test command to run after merges (auto-detected from package.json if empty)"
         },
-        "worktreePilot.maxConcurrentSessions": {
+        "grove.maxConcurrentSessions": {
           "type": "number",
           "default": 5,
           "description": "Maximum number of concurrent Claude Code sessions"
         },
-        "worktreePilot.showTokenEstimates": {
+        "grove.showTokenEstimates": {
           "type": "boolean",
           "default": true,
           "description": "Show estimated token cost before launching teams"
         },
-        "worktreePilot.fileWatcherDebounce": {
+        "grove.fileWatcherDebounce": {
           "type": "number",
           "default": 500,
           "description": "Debounce interval in ms for file change events"
         },
-        "worktreePilot.notifyOnSessionComplete": {
+        "grove.notifyOnSessionComplete": {
           "type": "boolean",
           "default": true,
           "description": "Show notification when a Claude Code session completes"
         },
-        "worktreePilot.autoGitignore": {
+        "grove.autoGitignore": {
           "type": "boolean",
           "default": true,
           "description": "Automatically add worktree paths to .gitignore"
         },
-        "worktreePilot.showStatusBarItem": {
+        "grove.showStatusBarItem": {
           "type": "boolean",
           "default": true,
           "description": "Show worktree info in the status bar"
         },
-        "worktreePilot.protectedBranches": {
+        "grove.protectedBranches": {
           "type": "array",
           "default": [
             "main",

@@ -108,7 +108,7 @@ export async function launchClaude(
             ],
             {
                 placeHolder: "Existing Claude session found in this worktree",
-                title: "WorkTree Pilot: Launch Claude",
+                title: "Grove: Launch Claude",
             }
         );
 

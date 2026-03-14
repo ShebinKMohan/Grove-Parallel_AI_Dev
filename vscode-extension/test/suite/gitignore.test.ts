@@ -46,7 +46,7 @@ describe("ensureGitignored", () => {
             path.join(tmpDir, ".gitignore"),
             "utf-8"
         );
-        assert.ok(content.includes("WorkTree Pilot"));
+        assert.ok(content.includes("Grove"));
     });
 
     it("appends to existing .gitignore", () => {

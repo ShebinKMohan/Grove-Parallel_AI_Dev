@@ -170,7 +170,7 @@ describe("template-manager", () => {
 
             try {
                 // Create a template in the project dir
-                const templateDir = ".worktreepilot/templates";
+                const templateDir = ".grove/templates";
                 const fullDir = path.join(tmpDir, templateDir);
                 fs.mkdirSync(fullDir, { recursive: true });
 

@@ -1,5 +1,5 @@
 /**
- * OutputChannel-based logging for WorkTree Pilot.
+ * OutputChannel-based logging for Grove.
  * Falls back to console when running outside VS Code (e.g., in tests).
  */
 
@@ -16,7 +16,7 @@ let outputChannel: { appendLine(value: string): void; dispose(): void } | undefi
 function getOutputChannel(): { appendLine(value: string): void } {
     if (!outputChannel) {
         if (vscodeModule) {
-            outputChannel = vscodeModule.window.createOutputChannel("WorkTree Pilot");
+            outputChannel = vscodeModule.window.createOutputChannel("Grove");
         } else {
             // Fallback for test environments
             outputChannel = {
