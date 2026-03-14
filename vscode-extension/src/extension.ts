@@ -1299,9 +1299,6 @@ export async function activate(
                 );
                 if (confirm !== "Start Merge") return;
 
-                // ── Pre-Merge Safety: save open files ────────────
-                await vscode.workspace.saveAll(false);
-
                 // ── Pre-Merge Safety: check for active sessions ──
                 const worktreePathsToMerge = picks.map((p) => p.worktree.path);
                 const activeSessionsInMerge = sessionTracker
@@ -1322,6 +1319,9 @@ export async function activate(
                         return;
                     }
                 }
+
+                // Save all open files before merging
+                await vscode.workspace.saveAll(false);
 
                 // Pre-flight: ensure repo is in a clean state
                 const repoState = await checkRepoState(repoRoot);
@@ -1406,7 +1406,7 @@ export async function activate(
                                     "Continue Anyway",
                                     "Abort Merge"
                                 );
-                                if (forceAction === "Abort Merge") {
+                                if (forceAction !== "Continue Anyway") {
                                     try {
                                         await abortMerge(repoRoot);
                                     } catch {
@@ -1483,7 +1483,7 @@ export async function activate(
                             "Continue",
                             "Abort"
                         );
-                        if (action === "Abort") {
+                        if (action !== "Continue") {
                             const previouslyMerged = mergedBranches.length > 0
                                 ? ` Previously merged: ${mergedBranches.join(", ")}.`
                                 : "";
@@ -1492,7 +1492,6 @@ export async function activate(
                             );
                             break;
                         }
-                        if (action !== "Continue") break;
                         continue;
                     } else {
                         mergedBranches.push(branch);
@@ -1525,8 +1524,24 @@ export async function activate(
 
                             if (action === "Open Terminal") {
                                 openTerminal(`Tests: ${branch}`, repoRoot);
-                            }
-                            if (action === "Abort") {
+                                // Pause and let user investigate before continuing
+                                const postFix = await vscode.window.showInformationMessage(
+                                    "Investigate the test failure in the terminal, then decide how to proceed.",
+                                    { modal: true },
+                                    "Continue",
+                                    "Abort"
+                                );
+                                if (postFix === "Abort" || !postFix) {
+                                    results[results.length - 1].status = "test-failed";
+                                    const previouslyMerged = mergedBranches.length > 0
+                                        ? ` Previously merged: ${mergedBranches.join(", ")}.`
+                                        : "";
+                                    void vscode.window.showInformationMessage(
+                                        `Merge sequence stopped after test failure on '${branch}'.${previouslyMerged} To undo all merges: git reset --hard ${preMergeHash}`
+                                    );
+                                    break;
+                                }
+                            } else if (action === "Abort" || !action) {
                                 results[results.length - 1].status = "test-failed";
                                 const previouslyMerged = mergedBranches.length > 0
                                     ? ` Previously merged: ${mergedBranches.join(", ")}.`

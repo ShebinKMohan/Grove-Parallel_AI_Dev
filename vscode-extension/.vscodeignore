@@ -6,6 +6,7 @@ out/test/**
 node_modules/**
 webview-ui/src/**
 webview-ui/node_modules/**
+webview-ui/index.html
 webview-ui/tsconfig.json
 webview-ui/tsconfig.tsbuildinfo
 webview-ui/package.json

@@ -72,6 +72,7 @@ interface PersistedTeam {
     templateName: string;
     taskDescription: string;
     createdAt: string;
+    endedAt?: string;
     status: TeamStatus;
     agents: PersistedAgent[];
 }
@@ -438,6 +439,18 @@ export class AgentOrchestrator implements vscode.Disposable {
         createdWorktreePaths: string[],
         createdClaudeMdPaths: string[]
     ): Promise<void> {
+        // Stop any sessions that were already spawned
+        for (const agent of team.agents) {
+            if (agent.sessionId) {
+                try {
+                    this.sessionTracker.stopSession(agent.sessionId);
+                } catch (err) {
+                    logError(`Failed to stop session for ${agent.role} during cancellation`, err);
+                }
+                agent.status = "stopped";
+            }
+        }
+
         // Delete CLAUDE.md files created so far
         for (const mdPath of createdClaudeMdPaths) {
             try {
@@ -544,9 +557,13 @@ export class AgentOrchestrator implements vscode.Disposable {
         agent.status = "stopped";
 
         // Check if all agents are done
-        const stillRunning = team.agents.some((a) => a.status === "running");
+        const stillRunning = team.agents.some(
+            (a) => a.status === "running" || a.status === "launching"
+        );
         if (!stillRunning) {
-            team.status = "completed";
+            // If any agent was manually stopped, team is "stopped", not "completed"
+            const anyStopped = team.agents.some((a) => a.status === "stopped");
+            team.status = anyStopped ? "stopped" : "completed";
             team.endedAt = new Date().toISOString();
         }
 
@@ -713,6 +730,7 @@ export class AgentOrchestrator implements vscode.Disposable {
                     templateName: t.templateName,
                     taskDescription: t.taskDescription,
                     createdAt: t.startedAt,
+                    endedAt: t.endedAt,
                     status: t.status,
                     agents: t.agents.map((a) => ({
                         role: a.role,
@@ -783,20 +801,32 @@ export class AgentOrchestrator implements vscode.Disposable {
 
                 if (!hasExistingWorktree) continue;
 
+                // Preserve terminal statuses; only override active states to "stopped"
+                const isTerminalStatus = (s: TeamStatus): boolean =>
+                    s === "completed" || s === "error" || s === "cancelled";
+
+                const restoredStatus: TeamStatus = isTerminalStatus(persisted.status)
+                    ? persisted.status
+                    : "stopped";
+
                 const team: TeamState = {
                     id: persisted.id,
                     name: persisted.name,
                     templateName: persisted.templateName,
                     taskDescription: persisted.taskDescription,
                     startedAt: persisted.createdAt,
-                    endedAt: new Date().toISOString(),
-                    status: "stopped",
+                    endedAt: isTerminalStatus(persisted.status)
+                        ? (persisted.endedAt ?? new Date().toISOString())
+                        : new Date().toISOString(),
+                    status: restoredStatus,
                     agents: persisted.agents.map((a) => ({
                         role: a.role,
                         displayName: a.displayName || a.role,
                         worktreePath: a.worktreePath,
                         branch: a.branch,
-                        status: "stopped",
+                        status: (a.status === "running" || a.status === "launching")
+                            ? "stopped" as const
+                            : a.status,
                     })),
                 };
 

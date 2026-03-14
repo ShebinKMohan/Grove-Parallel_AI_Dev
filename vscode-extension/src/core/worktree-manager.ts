@@ -355,9 +355,19 @@ export async function removeWorktree(
     // Normalize both sides: git may return canonical paths (e.g. /private/var on macOS)
     // while the caller passes the symlinked path (e.g. /var)
     const worktrees = await listWorktrees(repoRoot);
-    const resolvedWtPath = fs.realpathSync?.(wtPath) ?? path.resolve(wtPath);
+    let resolvedWtPath: string;
+    try {
+        resolvedWtPath = fs.realpathSync(wtPath);
+    } catch {
+        resolvedWtPath = path.resolve(wtPath);
+    }
     const wt = worktrees.find((w) => {
-        const resolvedW = fs.realpathSync?.(w.path) ?? path.resolve(w.path);
+        let resolvedW: string;
+        try {
+            resolvedW = fs.realpathSync(w.path);
+        } catch {
+            resolvedW = path.resolve(w.path);
+        }
         return resolvedW === resolvedWtPath;
     });
     const branchName = wt?.branch;

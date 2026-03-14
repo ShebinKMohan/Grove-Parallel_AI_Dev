@@ -391,6 +391,7 @@
             "yarn",
             "pnpm",
             "pip",
+            "pipenv",
             "poetry"
           ],
           "description": "Package manager to use for dependency installation"
