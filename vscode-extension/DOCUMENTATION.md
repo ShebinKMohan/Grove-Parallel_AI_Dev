@@ -1,6 +1,6 @@
 # Grove — Worktree Control for Claude Code
 
-> **Version:** 0.3.0
+> **Version:** 0.3.1
 > **Type:** VS Code / Cursor Extension
 > **License:** MIT
 

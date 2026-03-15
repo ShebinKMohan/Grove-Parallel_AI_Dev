@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.1] - 2026-03-15
+
+### Fixed
+- **Activity feed spam** — git temp files (`.git`, `.lock`, `.orig`, `.swp`, `.tmp`) now filtered out of file watchers; consecutive changes to the same file are collapsed with an `x N` repeat badge instead of flooding the feed
+- **View Changes showing empty** — now shows uncommitted (working tree) and staged changes alongside committed diffs, so in-progress Claude work is visible
+- **Sidebar session timer stuck** — added 30-second periodic refresh while sessions are active so elapsed time keeps ticking
+- **Interrupted 0-second sessions lingering** — sessions restored from persistence with no duration are now silently dropped instead of cluttering the Completed section
+
+### Added
+- **"Clear" button in dashboard** — Completed section now has a Clear button to remove finished sessions
+
 ## [0.3.0] - 2026-03-15
 
 ### Added
