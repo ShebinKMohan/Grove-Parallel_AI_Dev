@@ -64,10 +64,18 @@ export function Dashboard() {
         () => sessions.filter((s) => s.status === "running" || s.status === "idle"),
         [sessions]
     );
-    const completedSessions = useMemo(
-        () => sessions.filter((s) => s.status === "completed" || s.status === "error"),
-        [sessions]
-    );
+    const completedSessions = useMemo(() => {
+        const all = sessions.filter((s) => s.status === "completed" || s.status === "error");
+        // Keep only the most recent completed session per worktree
+        const latest = new Map<string, typeof all[number]>();
+        for (const s of all) {
+            const existing = latest.get(s.worktreePath);
+            if (!existing || (s.endedAt ?? s.startedAt) > (existing.endedAt ?? existing.startedAt)) {
+                latest.set(s.worktreePath, s);
+            }
+        }
+        return Array.from(latest.values());
+    }, [sessions]);
     const activeOverlapCount = useMemo(
         () => overlaps.filter((o) => !o.dismissed).length,
         [overlaps]

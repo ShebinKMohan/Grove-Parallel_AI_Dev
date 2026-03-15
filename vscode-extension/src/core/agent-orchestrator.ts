@@ -26,6 +26,7 @@ import {
 } from "./worktree-manager";
 import { generateClaudeMd } from "./claude-md-generator";
 import { loadProjectConfig } from "./config-manager";
+import { ensureGroveDirIgnored } from "./gitignore";
 import { SessionTracker } from "./session-tracker";
 import { launchClaude } from "../utils/terminal";
 import { log, logError } from "../utils/logger";
@@ -726,6 +727,7 @@ export class AgentOrchestrator implements vscode.Disposable {
             const dir = path.dirname(this.teamsFilePath);
             if (!fs.existsSync(dir)) {
                 fs.mkdirSync(dir, { recursive: true });
+                ensureGroveDirIgnored(this.repoRoot);
             }
 
             const data: PersistedTeam[] = [...this.teams.values()].map(

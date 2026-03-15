@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0] - 2026-03-16
+
+### Changed
+- **Dashboard layout** — session cards now use a two-column grid layout instead of a single column, making better use of space when monitoring multiple sessions
+- **File Activity redesigned** — replaced the raw chronological event log with a directory-grouped summary view: files are grouped by directory in a collapsible tree, each file shown once with its latest status (+/~/−) and an edit count badge. Noise files (`.tmp.*`, `.swp`, `.DS_Store`) are automatically filtered out
+- **Clickable file activity** — clicking any file in the Activity tab opens VS Code's diff editor comparing the base branch version against the current worktree version
+- **File activity persists across reload** — changes are now buffered on the extension side and replayed when the dashboard reconnects, so reloading the panel no longer clears the activity history
+- **Sync button conditional visibility** — the "Sync from Remote" button now only appears on worktrees that are actually behind the remote, acting as a visual indicator that a sync is needed. Previously it was always visible on every worktree
+- **Session launch streamlined** — removed the task description prompt from the Claude Code launch flow. Sessions start immediately. Users can still set a task description later via right-click → "Set Task Description"
+- **Removed elapsed timer** — the wall-clock timer on session cards and sidebar was misleading (it counted time even when Claude was idle). Removed from dashboard cards, sidebar descriptions, and tooltips
+
+### Removed
+- **"Show in Explorer" / "Hide from Explorer"** — removed the workspace folder integration that caused VS Code to switch to multi-root workspace mode ("UNTITLED (WORKSPACE)"). Worktrees can still be accessed via "Open in New Window" or "Open in Terminal"
+- **Workspace folder cleanup on delete** — no longer needed since worktrees are never added as workspace folders
+
 ## [0.3.1] - 2026-03-15
 
 ### Fixed

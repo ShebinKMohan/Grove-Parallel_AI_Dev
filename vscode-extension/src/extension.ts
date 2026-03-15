@@ -54,6 +54,23 @@ function getProtectedBranches(): string[] {
 }
 
 /**
+ * Build a human-readable description for a worktree in merge-related quick picks.
+ * Shows uncommitted change counts prominently so users see WIP before merging.
+ */
+function mergePickDescription(status: { modified: number; staged: number; untracked: number; conflicts: number }, statusSummary: string): string {
+    const total = status.modified + status.staged + status.untracked + status.conflicts;
+    if (statusSummary === "missing") return "$(warning) missing";
+    if (statusSummary === "error") return "$(warning) error";
+    if (total === 0) return "$(check) clean";
+    const parts: string[] = [];
+    if (status.conflicts > 0) parts.push(`${status.conflicts} conflict(s)`);
+    if (status.staged > 0) parts.push(`${status.staged} staged`);
+    if (status.modified > 0) parts.push(`${status.modified} modified`);
+    if (status.untracked > 0) parts.push(`${status.untracked} untracked`);
+    return `$(alert) ${total} uncommitted change${total === 1 ? "" : "s"} (${parts.join(", ")})`;
+}
+
+/**
  * All command IDs declared in package.json. When the workspace is not
  * a git repo (or no folder is open) we still need to register them so
  * VS Code doesn't show "command not found".
@@ -83,8 +100,6 @@ const ALL_COMMAND_IDS: readonly string[] = [
     "grove.executeMergeSequence",
     "grove.syncWorktree",
     "grove.quickMenu",
-    "grove.addToWorkspace",
-    "grove.removeFromWorkspace",
     "grove.openFileDiff",
 ] as const;
 
@@ -225,7 +240,6 @@ async function activateWithRepo(
 
     const overlapConfig = vscode.workspace.getConfiguration("grove");
     const overlapDetector = new OverlapDetector(
-        repoRoot,
         overlapConfig.get<number>("fileWatcherDebounce", 500)
     );
 
@@ -382,6 +396,13 @@ async function activateWithRepo(
             }
         }),
         { dispose: () => { if (timerInterval) clearInterval(timerInterval); } }
+    );
+
+    // ── Workspace folder changes (add/remove worktree from Explorer) ──
+    // When a worktree is added/removed as a workspace folder the tree view
+    // must refresh so items stay visible and context values stay accurate.
+    context.subscriptions.push(
+        vscode.workspace.onDidChangeWorkspaceFolders(() => refreshAll())
     );
 
     // ── Commands ────────────────────────────────────────────
@@ -697,6 +718,7 @@ async function activateWithRepo(
                                     force,
                                     protectedBranches: getProtectedBranches(),
                                 });
+
                                 removed++;
                             } catch (err) {
                                 logError(
@@ -773,19 +795,7 @@ async function activateWithRepo(
             // Non-critical — proceed even if the check fails
         }
 
-        // Prompt for task description if not provided
-        let task = taskDescription;
-        if (task === undefined) {
-            const input = await vscode.window.showInputBox({
-                prompt: "What should Claude work on? (optional)",
-                placeHolder:
-                    "e.g., Implement user authentication with JWT",
-                title: "Grove: Task Description",
-            });
-            // undefined means the user pressed Escape — cancel the launch
-            if (input === undefined) return;
-            task = input;
-        }
+        const task = taskDescription ?? "";
 
         const terminal = await launchClaude(branch, worktreePath);
         if (terminal) {
@@ -1081,75 +1091,21 @@ async function activateWithRepo(
         )
     );
 
-    // Refresh Sidebar
+    // Refresh Sidebar — fetches remote refs so behind counts are up to date
     context.subscriptions.push(
         vscode.commands.registerCommand(
             "grove.refreshSidebar",
-            () => {
+            async () => {
+                try {
+                    await fetchRemote(repoRoot);
+                } catch {
+                    // Non-critical — refresh even if fetch fails (offline, etc.)
+                }
                 refreshAll();
             }
         )
     );
 
-    // Add worktree to workspace (shows in Explorer)
-    context.subscriptions.push(
-        vscode.commands.registerCommand(
-            "grove.addToWorkspace",
-            (item?: WorktreeItem) => {
-                if (!item?.worktree) return;
-                const wtPath = item.worktree.path;
-                const wtUri = vscode.Uri.file(wtPath);
-
-                // Check if already added
-                const existing = vscode.workspace.workspaceFolders ?? [];
-                const alreadyAdded = existing.some(
-                    (f) => f.uri.fsPath === wtPath
-                );
-                if (alreadyAdded) {
-                    void showAutoInfo(
-                        `'${item.worktree.branch}' is already visible in the Explorer.`
-                    );
-                    return;
-                }
-
-                vscode.workspace.updateWorkspaceFolders(
-                    existing.length,
-                    0,
-                    { uri: wtUri, name: `WT: ${item.worktree.branch}` }
-                );
-                void showAutoInfo(
-                    `Added '${item.worktree.branch}' to the Explorer. You can now browse and edit files.`
-                );
-            }
-        )
-    );
-
-    // Remove worktree from workspace (hides from Explorer)
-    context.subscriptions.push(
-        vscode.commands.registerCommand(
-            "grove.removeFromWorkspace",
-            (item?: WorktreeItem) => {
-                if (!item?.worktree) return;
-                const wtPath = item.worktree.path;
-
-                const folders = vscode.workspace.workspaceFolders ?? [];
-                const idx = folders.findIndex(
-                    (f) => f.uri.fsPath === wtPath
-                );
-                if (idx === -1) {
-                    void showAutoInfo(
-                        `'${item.worktree.branch}' is not in the Explorer.`
-                    );
-                    return;
-                }
-
-                vscode.workspace.updateWorkspaceFolders(idx, 1);
-                void showAutoInfo(
-                    `Removed '${item.worktree.branch}' from the Explorer.`
-                );
-            }
-        )
-    );
 
     // Open Dashboard
     context.subscriptions.push(
@@ -1210,146 +1166,146 @@ async function activateWithRepo(
             "grove.launchTeam",
             async () => {
                 try {
-                const config = vscode.workspace.getConfiguration("grove");
-                const templateDir = config.get<string>(
-                    "templateDirectory",
-                    ".grove/templates"
-                );
-
-                // 1. Pick a template
-                const templateList = listTemplateNames(repoRoot, templateDir);
-                if (templateList.length === 0) {
-                    void showAutoWarning(
-                        "No team templates found. Create one with " +
-                        "'Grove: Create Team Template'."
+                    const config = vscode.workspace.getConfiguration("grove");
+                    const templateDir = config.get<string>(
+                        "templateDirectory",
+                        ".grove/templates"
                     );
-                    return;
-                }
 
-                const templatePick = await vscode.window.showQuickPick(
-                    templateList.map((t) => ({
-                        label: t.name,
-                        description: `(${t.source})`,
-                        detail: t.description,
-                    })),
-                    {
-                        placeHolder: "Select a team template",
-                        title: "Grove: Launch Agent Team",
+                    // 1. Pick a template
+                    const templateList = listTemplateNames(repoRoot, templateDir);
+                    if (templateList.length === 0) {
+                        void showAutoWarning(
+                            "No team templates found. Create one with " +
+                            "'Grove: Create Team Template'."
+                        );
+                        return;
                     }
-                );
-                if (!templatePick) return;
 
-                const template = loadTemplate(
-                    templatePick.label,
-                    repoRoot,
-                    templateDir
-                );
-                if (!template) {
-                    void showAutoError(
-                        `Failed to load template '${templatePick.label}'.\n\nThe template file may be corrupted or contain invalid JSON. Check the .grove/templates/ directory and the Grove output channel for details.`
-                    );
-                    return;
-                }
-
-                // 2. Get task description
-                const taskDescription = await vscode.window.showInputBox({
-                    prompt: "What should this team work on?",
-                    placeHolder: "e.g., Implement user authentication with JWT and OAuth",
-                    title: "Grove: Task Description",
-                });
-                if (taskDescription === undefined) return;
-
-                // 3. Get team name
-                const teamName = await vscode.window.showInputBox({
-                    prompt: "Team name (used for branch naming)",
-                    placeHolder: "e.g., auth-feature",
-                    title: "Grove: Team Name",
-                    validateInput: (value) => {
-                        if (!value) return "Team name is required.";
-                        if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(value)) {
-                            return "Use letters, numbers, dots, hyphens, underscores.";
+                    const templatePick = await vscode.window.showQuickPick(
+                        templateList.map((t) => ({
+                            label: t.name,
+                            description: `(${t.source})`,
+                            detail: t.description,
+                        })),
+                        {
+                            placeHolder: "Select a team template",
+                            title: "Grove: Launch Agent Team",
                         }
-                        return null;
-                    },
-                });
-                if (!teamName) return;
-
-                // 4. Pre-flight checks
-                const preflight = orchestrator.preFlight(template);
-
-                // Show overlaps if any
-                if (preflight.overlaps.length > 0) {
-                    const overlapMsg = preflight.overlaps
-                        .map((o) => `  ${o.pattern}: ${o.agents.join(", ")}`)
-                        .join("\n");
-                    const proceed = await vscode.window.showWarningMessage(
-                        `Ownership overlaps detected:\n${overlapMsg}`,
-                        { modal: true },
-                        "Continue Anyway"
                     );
-                    if (proceed !== "Continue Anyway") return;
-                }
+                    if (!templatePick) return;
 
-                // Show non-overlap warnings (always, even if overlaps were shown)
-                const nonOverlapWarnings = preflight.warnings.filter(
-                    (w) => !w.toLowerCase().includes("overlap")
-                );
-                if (nonOverlapWarnings.length > 0) {
-                    const proceed = await vscode.window.showWarningMessage(
-                        nonOverlapWarnings.join("\n"),
-                        { modal: true },
-                        "Continue"
-                    );
-                    if (proceed !== "Continue") return;
-                }
-
-                // 5. Confirmation
-                const showEstimates = config.get<boolean>(
-                    "showTokenEstimates",
-                    true
-                );
-                const confirmMsg =
-                    `Launch "${template.name}" team "${teamName}"?\n\n` +
-                    `• ${template.agents.length} agents / worktrees\n` +
-                    `• Task: ${taskDescription || "(none)"}` +
-                    (showEstimates
-                        ? `\n• Estimated tokens: ${preflight.estimatedTokens}`
-                        : "");
-
-                const confirm = await vscode.window.showInformationMessage(
-                    confirmMsg,
-                    { modal: true },
-                    "Launch Team"
-                );
-                if (confirm !== "Launch Team") return;
-
-                // 6. Launch (orchestrator manages its own progress + cancellation)
-                const team = await orchestrator.launchTeam(
-                    template,
-                    taskDescription || "",
-                    teamName
-                );
-
-                if (team && team.status !== "cancelled") {
-                    refreshAll();
-
-                    const running = team.agents.filter(
-                        (a) => a.status === "running"
-                    ).length;
-                    void showAutoInfo(
-                        `Team "${teamName}" launched: ${running}/${template.agents.length} agents running.`
-                    );
-
-                    // Auto-open dashboard after team launch
-                    DashboardPanel.createOrShow(
-                        context.extensionUri,
+                    const template = loadTemplate(
+                        templatePick.label,
                         repoRoot,
-                        sessionTracker,
-                        overlapDetector
+                        templateDir
                     );
-                } else if (team) {
-                    refreshAll();
-                }
+                    if (!template) {
+                        void showAutoError(
+                            `Failed to load template '${templatePick.label}'.\n\nThe template file may be corrupted or contain invalid JSON. Check the .grove/templates/ directory and the Grove output channel for details.`
+                        );
+                        return;
+                    }
+
+                    // 2. Get task description
+                    const taskDescription = await vscode.window.showInputBox({
+                        prompt: "What should this team work on?",
+                        placeHolder: "e.g., Implement user authentication with JWT and OAuth",
+                        title: "Grove: Task Description",
+                    });
+                    if (taskDescription === undefined) return;
+
+                    // 3. Get team name
+                    const teamName = await vscode.window.showInputBox({
+                        prompt: "Team name (used for branch naming)",
+                        placeHolder: "e.g., auth-feature",
+                        title: "Grove: Team Name",
+                        validateInput: (value) => {
+                            if (!value) return "Team name is required.";
+                            if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(value)) {
+                                return "Use letters, numbers, dots, hyphens, underscores.";
+                            }
+                            return null;
+                        },
+                    });
+                    if (!teamName) return;
+
+                    // 4. Pre-flight checks
+                    const preflight = orchestrator.preFlight(template);
+
+                    // Show overlaps if any
+                    if (preflight.overlaps.length > 0) {
+                        const overlapMsg = preflight.overlaps
+                            .map((o) => `  ${o.pattern}: ${o.agents.join(", ")}`)
+                            .join("\n");
+                        const proceed = await vscode.window.showWarningMessage(
+                            `Ownership overlaps detected:\n${overlapMsg}`,
+                            { modal: true },
+                            "Continue Anyway"
+                        );
+                        if (proceed !== "Continue Anyway") return;
+                    }
+
+                    // Show non-overlap warnings (always, even if overlaps were shown)
+                    const nonOverlapWarnings = preflight.warnings.filter(
+                        (w) => !w.toLowerCase().includes("overlap")
+                    );
+                    if (nonOverlapWarnings.length > 0) {
+                        const proceed = await vscode.window.showWarningMessage(
+                            nonOverlapWarnings.join("\n"),
+                            { modal: true },
+                            "Continue"
+                        );
+                        if (proceed !== "Continue") return;
+                    }
+
+                    // 5. Confirmation
+                    const showEstimates = config.get<boolean>(
+                        "showTokenEstimates",
+                        true
+                    );
+                    const confirmMsg =
+                        `Launch "${template.name}" team "${teamName}"?\n\n` +
+                        `• ${template.agents.length} agents / worktrees\n` +
+                        `• Task: ${taskDescription || "(none)"}` +
+                        (showEstimates
+                            ? `\n• Estimated tokens: ${preflight.estimatedTokens}`
+                            : "");
+
+                    const confirm = await vscode.window.showInformationMessage(
+                        confirmMsg,
+                        { modal: true },
+                        "Launch Team"
+                    );
+                    if (confirm !== "Launch Team") return;
+
+                    // 6. Launch (orchestrator manages its own progress + cancellation)
+                    const team = await orchestrator.launchTeam(
+                        template,
+                        taskDescription || "",
+                        teamName
+                    );
+
+                    if (team && team.status !== "cancelled") {
+                        refreshAll();
+
+                        const running = team.agents.filter(
+                            (a) => a.status === "running"
+                        ).length;
+                        void showAutoInfo(
+                            `Team "${teamName}" launched: ${running}/${template.agents.length} agents running.`
+                        );
+
+                        // Auto-open dashboard after team launch
+                        DashboardPanel.createOrShow(
+                            context.extensionUri,
+                            repoRoot,
+                            sessionTracker,
+                            overlapDetector
+                        );
+                    } else if (team) {
+                        refreshAll();
+                    }
                 } catch (err) {
                     logError("Team launch failed", err);
                     void showAutoError(
@@ -1470,53 +1426,53 @@ async function activateWithRepo(
             "grove.runOverlapCheck",
             async () => {
                 try {
-                const activeSessions = sessionTracker.getActiveSessions();
-                if (activeSessions.length < 2) {
-                    void showAutoInfo(
-                        "Need at least 2 active sessions to check for overlaps."
-                    );
-                    return;
-                }
-
-                await vscode.window.withProgress(
-                    {
-                        location: vscode.ProgressLocation.Notification,
-                        title: "Scanning for file overlaps...",
-                        cancellable: false,
-                    },
-                    async () => {
-                        const config = vscode.workspace.getConfiguration("grove");
-                        const baseBranch = config.get<string>("defaultBaseBranch", "main");
-
-                        await overlapDetector.scanExistingChanges(
-                            activeSessions.map((s) => ({
-                                path: s.worktreePath,
-                                branch: s.branch,
-                            })),
-                            baseBranch
+                    const activeSessions = sessionTracker.getActiveSessions();
+                    if (activeSessions.length < 2) {
+                        void showAutoInfo(
+                            "Need at least 2 active sessions to check for overlaps."
                         );
+                        return;
+                    }
 
-                        const count = overlapDetector.activeOverlapCount;
-                        if (count > 0) {
-                            const action = await vscode.window.showWarningMessage(
-                                `Found ${count} file overlap(s) across worktrees.`,
-                                "Open Dashboard"
+                    await vscode.window.withProgress(
+                        {
+                            location: vscode.ProgressLocation.Notification,
+                            title: "Scanning for file overlaps...",
+                            cancellable: false,
+                        },
+                        async () => {
+                            const config = vscode.workspace.getConfiguration("grove");
+                            const baseBranch = config.get<string>("defaultBaseBranch", "main");
+
+                            await overlapDetector.scanExistingChanges(
+                                activeSessions.map((s) => ({
+                                    path: s.worktreePath,
+                                    branch: s.branch,
+                                })),
+                                baseBranch
                             );
-                            if (action === "Open Dashboard") {
-                                DashboardPanel.createOrShow(
-                                    context.extensionUri,
-                                    repoRoot,
-                                    sessionTracker,
-                                    overlapDetector
+
+                            const count = overlapDetector.activeOverlapCount;
+                            if (count > 0) {
+                                const action = await vscode.window.showWarningMessage(
+                                    `Found ${count} file overlap(s) across worktrees.`,
+                                    "Open Dashboard"
+                                );
+                                if (action === "Open Dashboard") {
+                                    DashboardPanel.createOrShow(
+                                        context.extensionUri,
+                                        repoRoot,
+                                        sessionTracker,
+                                        overlapDetector
+                                    );
+                                }
+                            } else {
+                                void showAutoInfo(
+                                    "No file overlaps detected."
                                 );
                             }
-                        } else {
-                            void showAutoInfo(
-                                "No file overlaps detected."
-                            );
                         }
-                    }
-                );
+                    );
                 } catch (err) {
                     logError("Overlap check failed", err);
                     void showAutoError(
@@ -1535,66 +1491,84 @@ async function activateWithRepo(
             "grove.generateMergeReport",
             async () => {
                 try {
-                const worktrees = await listAllWorktrees(repoRoot);
-                const nonMain = worktrees.filter((wt) => !wt.isMain);
+                    const worktrees = await listAllWorktrees(repoRoot);
+                    const nonMain = worktrees.filter((wt) => !wt.isMain);
 
-                if (nonMain.length === 0) {
-                    void showAutoInfo(
-                        "No worktrees to generate a merge report for."
-                    );
-                    return;
-                }
-
-                // Let user select which worktrees to include
-                const picks = await vscode.window.showQuickPick(
-                    nonMain.map((wt) => ({
-                        label: wt.branch,
-                        description: wt.statusSummary,
-                        detail: wt.path,
-                        picked: true,
-                        worktree: wt,
-                    })),
-                    {
-                        placeHolder: "Select worktrees to include in merge report",
-                        title: "Grove: Merge Report",
-                        canPickMany: true,
+                    if (nonMain.length === 0) {
+                        void showAutoInfo(
+                            "No worktrees to generate a merge report for."
+                        );
+                        return;
                     }
-                );
-                if (!picks || picks.length === 0) return;
 
-                const config = vscode.workspace.getConfiguration("grove");
-                const baseBranch = config.get<string>("defaultBaseBranch", "main");
+                    // Let user select which worktrees to include
+                    const picks = await vscode.window.showQuickPick(
+                        nonMain.map((wt) => ({
+                            label: wt.branch,
+                            description: mergePickDescription(wt.status, wt.statusSummary),
+                            detail: wt.path,
+                            picked: true,
+                            worktree: wt,
+                        })),
+                        {
+                            placeHolder: "Select worktrees to include in merge report",
+                            title: "Grove: Merge Report",
+                            canPickMany: true,
+                        }
+                    );
+                    if (!picks || picks.length === 0) return;
 
-                const report = await vscode.window.withProgress(
-                    {
-                        location: vscode.ProgressLocation.Notification,
-                        title: "Generating merge report...",
-                        cancellable: false,
-                    },
-                    async () =>
-                        generateMergeReport(
-                            picks.map((p) => p.worktree.path),
-                            baseBranch
-                        )
-                );
+                    const config = vscode.workspace.getConfiguration("grove");
+                    const baseBranch = config.get<string>("defaultBaseBranch", "main");
 
-                // Show report in a new untitled markdown document
-                const markdown = formatMergeReportMarkdown(report);
-                const doc = await vscode.workspace.openTextDocument({
-                    content: markdown,
-                    language: "markdown",
-                });
-                await vscode.window.showTextDocument(doc, {
-                    preview: true,
-                    viewColumn: vscode.ViewColumn.One,
-                });
+                    const report = await vscode.window.withProgress(
+                        {
+                            location: vscode.ProgressLocation.Notification,
+                            title: "Generating merge report...",
+                            cancellable: false,
+                        },
+                        async () =>
+                            generateMergeReport(
+                                picks.map((p) => p.worktree.path),
+                                baseBranch
+                            )
+                    );
 
-                // Summary notification
-                const overlapCount = report.overlaps.length;
-                const msg = overlapCount > 0
-                    ? `Merge report ready. ${overlapCount} file overlap(s) detected.`
-                    : "Merge report ready. No file overlaps detected.";
-                void showAutoInfo(msg);
+                    // Show report in a new untitled markdown document
+                    const markdown = formatMergeReportMarkdown(report);
+                    const doc = await vscode.workspace.openTextDocument({
+                        content: markdown,
+                        language: "markdown",
+                    });
+                    await vscode.window.showTextDocument(doc, {
+                        preview: true,
+                        viewColumn: vscode.ViewColumn.One,
+                    });
+
+                    // Summary notification
+                    const overlapCount = report.overlaps.length;
+                    const conflictCount = report.conflictPredictions.reduce(
+                        (sum, p) => sum + p.conflictFiles.length, 0
+                    );
+                    const baseOverlapCount = report.conflictPredictions.reduce(
+                        (sum, p) => sum + p.baseOverlapFiles.length, 0
+                    );
+
+                    if (conflictCount > 0) {
+                        void vscode.window.showWarningMessage(
+                            `Merge report ready. ${conflictCount} merge conflict(s) predicted against ${baseBranch}! Review the report before merging.`
+                        );
+                    } else if (baseOverlapCount > 0) {
+                        void vscode.window.showWarningMessage(
+                            `Merge report ready. ${baseOverlapCount} file(s) changed on both base and branch — check the report for potential conflicts.`
+                        );
+                    } else if (overlapCount > 0) {
+                        void showAutoInfo(
+                            `Merge report ready. ${overlapCount} worktree-to-worktree overlap(s) detected.`
+                        );
+                    } else {
+                        void showAutoInfo("Merge report ready. No conflicts detected.");
+                    }
                 } catch (err) {
                     logError("Merge report generation failed", err);
                     void showAutoError(
@@ -1611,366 +1585,408 @@ async function activateWithRepo(
             "grove.executeMergeSequence",
             async () => {
                 try {
-                const worktrees = await listAllWorktrees(repoRoot);
-                const nonMain = worktrees.filter((wt) => !wt.isMain);
+                    const worktrees = await listAllWorktrees(repoRoot);
+                    const nonMain = worktrees.filter((wt) => !wt.isMain);
 
-                if (nonMain.length === 0) {
-                    void showAutoInfo(
-                        "No worktrees to merge."
-                    );
-                    return;
-                }
-
-                // Select worktrees
-                const picks = await vscode.window.showQuickPick(
-                    nonMain.map((wt) => ({
-                        label: wt.branch,
-                        description: wt.statusSummary,
-                        detail: wt.path,
-                        picked: true,
-                        worktree: wt,
-                    })),
-                    {
-                        placeHolder: "Select worktrees to merge (in order)",
-                        title: "Grove: Merge Sequence",
-                        canPickMany: true,
-                    }
-                );
-                if (!picks || picks.length === 0) return;
-
-                const config = vscode.workspace.getConfiguration("grove");
-                const baseBranch = config.get<string>("defaultBaseBranch", "main");
-
-                // Detect test command
-                let testCmd = config.get<string>("testCommand", "");
-                if (!testCmd) {
-                    testCmd = detectTestCommand(repoRoot) ?? "";
-                }
-
-                const runTestsAfterMerge = testCmd
-                    ? (await vscode.window.showQuickPick(
-                          [
-                              { label: "Yes", description: `Run: ${testCmd}`, value: true },
-                              { label: "No", description: "Skip tests", value: false },
-                          ],
-                          {
-                              placeHolder: "Run tests after each merge?",
-                              title: "Grove: Test After Merge",
-                          }
-                      ))?.value ?? false
-                    : false;
-
-                // Confirmation
-                const confirm = await vscode.window.showWarningMessage(
-                    `Merge ${picks.length} branch(es) into ${baseBranch} sequentially?`,
-                    { modal: true },
-                    "Start Merge"
-                );
-                if (confirm !== "Start Merge") return;
-
-                // ── Pre-Merge Safety: check for active sessions ──
-                const worktreePathsToMerge = picks.map((p) => p.worktree.path);
-                const activeSessionsInMerge = sessionTracker
-                    .getActiveSessions()
-                    .filter((s) => worktreePathsToMerge.includes(s.worktreePath));
-
-                if (activeSessionsInMerge.length > 0) {
-                    const sessionAction = await vscode.window.showWarningMessage(
-                        `${activeSessionsInMerge.length} agent session(s) are still running in worktrees being merged. Stop them before merging.`,
-                        "Stop All & Continue",
-                        "Cancel"
-                    );
-                    if (sessionAction === "Stop All & Continue") {
-                        for (const session of activeSessionsInMerge) {
-                            sessionTracker.stopSession(session.id);
-                        }
-                    } else {
+                    if (nonMain.length === 0) {
+                        void showAutoInfo(
+                            "No worktrees to merge."
+                        );
                         return;
                     }
-                }
 
-                // Save all open files before merging
-                await vscode.workspace.saveAll(false);
+                    const config = vscode.workspace.getConfiguration("grove");
+                    const baseBranch = config.get<string>("defaultBaseBranch", "main");
 
-                // Pre-flight: ensure repo is in a clean state
-                const repoState = await checkRepoState(repoRoot);
-                if (!repoState.clean) {
-                    void showAutoError(
-                        `Cannot start merge: ${repoState.reason}`
-                    );
-                    return;
-                }
-
-                // Auto-commit uncommitted changes in each worktree before merging.
-                // Only stage tracked files (git add -u) to avoid committing
-                // generated CLAUDE.md, .env files, or other untracked artifacts.
-                for (const pick of picks) {
-                    const wtPath = pick.worktree.path;
-                    try {
-                        const status = await git(["status", "--porcelain"], wtPath);
-                        if (status.trim().length > 0) {
-                            await gitWrite(["add", "-u"], wtPath);
-                            // Check if there's actually anything staged after -u
-                            const staged = await git(["diff", "--cached", "--name-only"], wtPath);
-                            if (staged.trim().length > 0) {
-                                await gitWrite(
-                                    ["commit", "-m", "Grove: auto-commit agent changes"],
-                                    wtPath
-                                );
-                                log(`Auto-committed changes in ${pick.worktree.branch}`);
-                            }
+                    // Select worktrees — numbered to show merge order, with merge direction
+                    const picks = await vscode.window.showQuickPick(
+                        nonMain.map((wt, i) => ({
+                            label: `${i + 1}. ${wt.branch} \u2192 ${baseBranch}`,
+                            description: mergePickDescription(wt.status, wt.statusSummary),
+                            detail: wt.path,
+                            picked: true,
+                            worktree: wt,
+                        })),
+                        {
+                            placeHolder: "Select and reorder worktrees to merge sequentially",
+                            title: "Grove: Merge Sequence",
+                            canPickMany: true,
                         }
-                    } catch (err) {
-                        logError(`Failed to auto-commit in ${pick.worktree.branch}`, err);
+                    );
+                    if (!picks || picks.length === 0) return;
+
+                    const total = picks.length;
+
+                    // Detect test command
+                    let testCmd = config.get<string>("testCommand", "");
+                    if (!testCmd) {
+                        testCmd = detectTestCommand(repoRoot) ?? "";
                     }
-                }
 
-                // ── Capture pre-merge state for abort recovery ───
-                const preMergeHash = (await git(["rev-parse", "HEAD"], repoRoot)).trim();
-                const mergedBranches: string[] = [];
+                    const runTestsAfterMerge = testCmd
+                        ? (await vscode.window.showQuickPick(
+                              [
+                                  { label: "Yes", description: `Run: ${testCmd}`, value: true },
+                                  { label: "No", description: "Skip tests", value: false },
+                              ],
+                              {
+                                  placeHolder: "Run tests after each merge?",
+                                  title: "Grove: Test After Merge",
+                              }
+                          ))?.value ?? false
+                        : false;
 
-                // Execute merges sequentially
-                const results: Array<{ branch: string; status: string; message: string }> = [];
-
-                for (const pick of picks) {
-                    const branch = pick.worktree.branch;
-
-                    const step = await vscode.window.withProgress(
+                    // ── Pre-Merge Conflict Prediction ──
+                    const report = await vscode.window.withProgress(
                         {
                             location: vscode.ProgressLocation.Notification,
-                            title: `Merging ${branch}...`,
+                            title: "Checking for merge conflicts...",
                             cancellable: false,
                         },
-                        async () => executeMergeStep(repoRoot, branch, baseBranch)
+                        async () =>
+                            generateMergeReport(
+                                picks.map((p) => p.worktree.path),
+                                baseBranch
+                            )
                     );
 
-                    if (step.status === "conflict") {
-                        const action = await vscode.window.showWarningMessage(
-                            `Merge conflict in ${branch}: ${step.conflictFiles?.join(", ")}`,
+                    const predictedConflicts = report.conflictPredictions.filter(
+                        (p) => p.conflictFiles.length > 0
+                    );
+                    const baseOverlaps = report.conflictPredictions.filter(
+                        (p) => p.baseOverlapFiles.length > 0
+                    );
+
+                    if (predictedConflicts.length > 0) {
+                        const conflictDetails = predictedConflicts.map((p) =>
+                            `${p.branch}: ${p.conflictFiles.join(", ")}`
+                        ).join("\n");
+                        const proceed = await vscode.window.showWarningMessage(
+                            `Merge conflicts predicted!\n\n${conflictDetails}\n\nThese branches will conflict with ${baseBranch}. You can proceed and resolve manually, or abort and fix first.`,
                             { modal: true },
-                            "Open Terminal to Resolve",
-                            "Abort Merge",
-                            "Skip This Branch"
+                            "Proceed Anyway",
+                            "Generate Report"
                         );
-
-                        if (action === "Open Terminal to Resolve") {
-                            const terminal = openTerminal(
-                                `Resolve: ${branch}`,
-                                repoRoot
-                            );
-                            terminal.sendText("git status");
-
-                            await vscode.window.showInformationMessage(
-                                "Resolve conflicts in the terminal, commit, then click Continue.",
-                                { modal: true },
-                                "Continue"
-                            );
-
-                            // Verify conflicts are actually resolved
-                            const postResolveState = await checkRepoState(repoRoot);
-                            if (!postResolveState.clean) {
-                                const forceAction = await vscode.window.showWarningMessage(
-                                    `Conflicts may not be fully resolved: ${postResolveState.reason}`,
-                                    { modal: true },
-                                    "Continue Anyway",
-                                    "Abort Merge"
-                                );
-                                if (forceAction !== "Continue Anyway") {
-                                    try {
-                                        await abortMerge(repoRoot);
-                                    } catch {
-                                        // merge --abort may fail if already resolved
-                                    }
-                                    results.push({
-                                        branch,
-                                        status: "aborted",
-                                        message: "Merge aborted — conflicts unresolved",
-                                    });
-                                    const previouslyMerged = mergedBranches.length > 0
-                                        ? ` Previously merged: ${mergedBranches.join(", ")}.`
-                                        : "";
-                                    void showAutoInfo(
-                                        `Merge aborted for '${branch}'.${previouslyMerged} To undo all merges: git reset --hard ${preMergeHash}`,
-                                        20_000
-                                    );
-                                    break;
-                                }
-                            }
-
-                            mergedBranches.push(branch);
-                            results.push({
-                                branch,
-                                status: "resolved",
-                                message: "Conflicts resolved manually",
+                        if (proceed === "Generate Report") {
+                            const markdown = formatMergeReportMarkdown(report);
+                            const doc = await vscode.workspace.openTextDocument({
+                                content: markdown,
+                                language: "markdown",
                             });
-                        } else if (action === "Abort Merge") {
-                            try {
-                                await abortMerge(repoRoot);
-                            } catch {
-                                // merge --abort may fail if no merge is in progress
-                            }
-                            results.push({
-                                branch,
-                                status: "aborted",
-                                message: "Merge aborted",
+                            await vscode.window.showTextDocument(doc, {
+                                preview: true,
+                                viewColumn: vscode.ViewColumn.One,
                             });
-                            const previouslyMerged = mergedBranches.length > 0
-                                ? ` Previously merged: ${mergedBranches.join(", ")}.`
-                                : "";
-                            void showAutoInfo(
-                                `Merge aborted for '${branch}'.${previouslyMerged} To undo all merges: git reset --hard ${preMergeHash}`,
-                                20_000
-                            );
-                            break;
-                        } else {
-                            try {
-                                await abortMerge(repoRoot);
-                            } catch {
-                                // merge --abort may fail if no merge is in progress
-                            }
-                            results.push({
-                                branch,
-                                status: "skipped",
-                                message: "Skipped due to conflict",
-                            });
-                            continue;
+                            return;
                         }
-                    } else if (step.status === "error") {
-                        // Clean up any partial merge state before continuing
-                        try {
-                            await abortMerge(repoRoot);
-                        } catch {
-                            // No merge in progress to abort — that's fine
-                        }
-
-                        results.push({
-                            branch,
-                            status: "error",
-                            message: step.message ?? "Unknown error",
-                        });
-
-                        const action = await vscode.window.showErrorMessage(
-                            `Failed to merge ${branch}: ${step.message}`,
+                        if (proceed !== "Proceed Anyway") return;
+                    } else if (baseOverlaps.length > 0) {
+                        const overlapDetails = baseOverlaps.map((p) =>
+                            `${p.branch}: ${p.baseOverlapFiles.length} shared file(s)`
+                        ).join("\n");
+                        const proceed = await vscode.window.showWarningMessage(
+                            `Some files were changed on both ${baseBranch} and these branches since they diverged:\n\n${overlapDetails}\n\nThey may merge cleanly or may require manual resolution.`,
+                            { modal: true },
                             "Continue",
-                            "Abort"
+                            "Generate Report"
                         );
-                        if (action !== "Continue") {
-                            const previouslyMerged = mergedBranches.length > 0
-                                ? ` Previously merged: ${mergedBranches.join(", ")}.`
-                                : "";
-                            void showAutoInfo(
-                                `Merge aborted for '${branch}'.${previouslyMerged} To undo all merges: git reset --hard ${preMergeHash}`,
-                                20_000
-                            );
-                            break;
+                        if (proceed === "Generate Report") {
+                            const markdown = formatMergeReportMarkdown(report);
+                            const doc = await vscode.workspace.openTextDocument({
+                                content: markdown,
+                                language: "markdown",
+                            });
+                            await vscode.window.showTextDocument(doc, {
+                                preview: true,
+                                viewColumn: vscode.ViewColumn.One,
+                            });
+                            return;
                         }
-                        continue;
-                    } else {
-                        mergedBranches.push(branch);
-                        results.push({
-                            branch,
-                            status: "merged",
-                            message: "Clean merge",
-                        });
+                        if (proceed !== "Continue") return;
                     }
 
-                    // Run tests if configured
-                    if (runTestsAfterMerge && testCmd) {
-                        const testResult = await vscode.window.withProgress(
-                            {
-                                location: vscode.ProgressLocation.Notification,
-                                title: `Running tests after ${branch}...`,
-                                cancellable: false,
-                            },
-                            async () => runTests(repoRoot, testCmd)
-                        );
+                    // Confirmation — show the numbered merge plan
+                    const planLines = picks.map((p, i) =>
+                        `${i + 1}. ${p.worktree.branch} \u2192 ${baseBranch}`
+                    ).join("\n");
+                    const confirmMsg =
+                        `Merge ${total} branch(es) into ${baseBranch} in this order?\n\n${planLines}`;
+                    const confirm = await vscode.window.showWarningMessage(
+                        confirmMsg,
+                        { modal: true },
+                        "Start Merge"
+                    );
+                    if (confirm !== "Start Merge") return;
 
-                        if (!testResult.passed) {
+                    // ── Pre-Merge Safety: check for active sessions ──
+                    const worktreePathsToMerge = picks.map((p) => p.worktree.path);
+                    const activeSessionsInMerge = sessionTracker
+                        .getActiveSessions()
+                        .filter((s) => worktreePathsToMerge.includes(s.worktreePath));
+
+                    if (activeSessionsInMerge.length > 0) {
+                        const sessionAction = await vscode.window.showWarningMessage(
+                            `${activeSessionsInMerge.length} agent session(s) are still running in worktrees being merged. Stop them before merging.`,
+                            "Stop All & Continue",
+                            "Cancel"
+                        );
+                        if (sessionAction === "Stop All & Continue") {
+                            for (const session of activeSessionsInMerge) {
+                                sessionTracker.stopSession(session.id);
+                            }
+                        } else {
+                            return;
+                        }
+                    }
+
+                    // Save all open files before merging
+                    await vscode.workspace.saveAll(false);
+
+                    // Pre-flight: ensure repo is in a clean state
+                    const repoState = await checkRepoState(repoRoot);
+                    if (!repoState.clean) {
+                        void showAutoError(
+                            `Cannot start merge: ${repoState.reason}`
+                        );
+                        return;
+                    }
+
+                    // Auto-commit uncommitted changes in each worktree before merging.
+                    // Only stage tracked files (git add -u) to avoid committing
+                    // generated CLAUDE.md, .env files, or other untracked artifacts.
+                    for (const pick of picks) {
+                        const wtPath = pick.worktree.path;
+                        try {
+                            const status = await git(["status", "--porcelain"], wtPath);
+                            if (status.trim().length > 0) {
+                                await gitWrite(["add", "-u"], wtPath);
+                                // Check if there's actually anything staged after -u
+                                const staged = await git(["diff", "--cached", "--name-only"], wtPath);
+                                if (staged.trim().length > 0) {
+                                    await gitWrite(
+                                        ["commit", "-m", "Grove: auto-commit agent changes"],
+                                        wtPath
+                                    );
+                                    log(`Auto-committed changes in ${pick.worktree.branch}`);
+                                }
+                            }
+                        } catch (err) {
+                            logError(`Failed to auto-commit in ${pick.worktree.branch}`, err);
+                        }
+                    }
+
+                    // ── Capture pre-merge state for abort recovery ───
+                    const preMergeHash = (await git(["rev-parse", "HEAD"], repoRoot)).trim();
+                    const mergedBranches: string[] = [];
+                    const results: Array<{ branch: string; status: string; message: string }> = [];
+
+                    // ── Execute merges inside a single progress notification ──
+                    await vscode.window.withProgress(
+                        {
+                            location: vscode.ProgressLocation.Notification,
+                            title: "Grove: Merge Sequence",
+                            cancellable: false,
+                        },
+                        async (progress) => {
+                    for (let i = 0; i < total; i++) {
+                        const pick = picks[i];
+                        const branch = pick.worktree.branch;
+                        const stepLabel = `${i + 1}/${total}: ${branch} \u2192 ${baseBranch}`;
+
+                        progress.report({
+                            message: `Merging ${stepLabel}...`,
+                            increment: (1 / total) * 100,
+                        });
+
+                        const step = await executeMergeStep(repoRoot, branch, baseBranch);
+
+                        if (step.status === "conflict") {
+                            progress.report({ message: `Step ${i + 1}/${total} \u2014 conflict in ${branch}` });
+
                             const action = await vscode.window.showWarningMessage(
-                                `Tests failed after merging ${branch}.`,
+                                `Step ${i + 1}/${total} conflict: ${branch} \u2192 ${baseBranch}\n\nConflicting files: ${step.conflictFiles?.join(", ")}`,
                                 { modal: true },
-                                "Continue Anyway",
-                                "Open Terminal",
-                                "Abort"
+                                "Open Terminal to Resolve",
+                                "Abort Merge",
+                                "Skip This Branch"
                             );
 
-                            if (action === "Open Terminal") {
-                                openTerminal(`Tests: ${branch}`, repoRoot);
-                                // Pause and let user investigate before continuing
-                                const postFix = await vscode.window.showInformationMessage(
-                                    "Investigate the test failure in the terminal, then decide how to proceed.",
-                                    { modal: true },
-                                    "Continue",
-                                    "Abort"
+                            if (action === "Open Terminal to Resolve") {
+                                const terminal = openTerminal(
+                                    `Resolve: ${branch}`,
+                                    repoRoot
                                 );
-                                if (postFix === "Abort" || !postFix) {
-                                    results[results.length - 1].status = "test-failed";
-                                    const previouslyMerged = mergedBranches.length > 0
-                                        ? ` Previously merged: ${mergedBranches.join(", ")}.`
-                                        : "";
-                                    void showAutoInfo(
-                                        `Merge sequence stopped after test failure on '${branch}'.${previouslyMerged} To undo all merges: git reset --hard ${preMergeHash}`,
-                                        20_000
+                                terminal.sendText("git status");
+
+                                await vscode.window.showInformationMessage(
+                                    "Resolve conflicts in the terminal, commit, then click Continue.",
+                                    { modal: true },
+                                    "Continue"
+                                );
+
+                                // Verify conflicts are actually resolved
+                                const postResolveState = await checkRepoState(repoRoot);
+                                if (!postResolveState.clean) {
+                                    const forceAction = await vscode.window.showWarningMessage(
+                                        `Conflicts may not be fully resolved: ${postResolveState.reason}`,
+                                        { modal: true },
+                                        "Continue Anyway",
+                                        "Abort Merge"
                                     );
-                                    break;
+                                    if (forceAction !== "Continue Anyway") {
+                                        try { await abortMerge(repoRoot); } catch { /* already resolved */ }
+                                        results.push({ branch, status: "aborted", message: "Merge aborted \u2014 conflicts unresolved" });
+                                        const prev = mergedBranches.length > 0 ? ` Previously merged: ${mergedBranches.join(", ")}.` : "";
+                                        void showAutoInfo(
+                                            `Step ${i + 1}/${total} aborted: ${branch}.${prev} To undo all merges: git reset --hard ${preMergeHash}`,
+                                            20_000
+                                        );
+                                        break;
+                                    }
                                 }
-                            } else if (action === "Abort" || !action) {
-                                results[results.length - 1].status = "test-failed";
-                                const previouslyMerged = mergedBranches.length > 0
-                                    ? ` Previously merged: ${mergedBranches.join(", ")}.`
-                                    : "";
+
+                                mergedBranches.push(branch);
+                                results.push({ branch, status: "resolved", message: "Conflicts resolved manually" });
+                                progress.report({ message: `Step ${i + 1}/${total} \u2014 ${branch} resolved` });
+                            } else if (action === "Abort Merge") {
+                                try { await abortMerge(repoRoot); } catch { /* no merge in progress */ }
+                                results.push({ branch, status: "aborted", message: "Merge aborted" });
+                                const prev = mergedBranches.length > 0 ? ` Previously merged: ${mergedBranches.join(", ")}.` : "";
                                 void showAutoInfo(
-                                    `Merge sequence stopped after test failure on '${branch}'.${previouslyMerged} To undo all merges: git reset --hard ${preMergeHash}`,
+                                    `Step ${i + 1}/${total} aborted: ${branch}.${prev} To undo all merges: git reset --hard ${preMergeHash}`,
+                                    20_000
+                                );
+                                break;
+                            } else {
+                                try { await abortMerge(repoRoot); } catch { /* no merge in progress */ }
+                                results.push({ branch, status: "skipped", message: "Skipped due to conflict" });
+                                progress.report({ message: `Step ${i + 1}/${total} \u2014 ${branch} skipped` });
+                                continue;
+                            }
+                        } else if (step.status === "error") {
+                            // Clean up any partial merge state before continuing
+                            try { await abortMerge(repoRoot); } catch { /* no merge in progress */ }
+                            results.push({ branch, status: "error", message: step.message ?? "Unknown error" });
+                            progress.report({ message: `Step ${i + 1}/${total} \u2014 ${branch} failed` });
+
+                            const action = await vscode.window.showErrorMessage(
+                                `Step ${i + 1}/${total} failed: ${branch} \u2192 ${baseBranch}\n\n${step.message}`,
+                                "Continue",
+                                "Abort"
+                            );
+                            if (action !== "Continue") {
+                                const prev = mergedBranches.length > 0 ? ` Previously merged: ${mergedBranches.join(", ")}.` : "";
+                                void showAutoInfo(
+                                    `Merge sequence stopped at step ${i + 1}/${total}: ${branch}.${prev} To undo all merges: git reset --hard ${preMergeHash}`,
                                     20_000
                                 );
                                 break;
                             }
+                            continue;
+                        } else {
+                            mergedBranches.push(branch);
+                            results.push({ branch, status: "merged", message: "Clean merge" });
+                            progress.report({ message: `Step ${i + 1}/${total} \u2014 ${branch} \u2713` });
+                        }
+
+                        // Run tests if configured
+                        if (runTestsAfterMerge && testCmd) {
+                            progress.report({ message: `Testing after ${stepLabel}...` });
+                            const testResult = await runTests(repoRoot, testCmd);
+
+                            if (!testResult.passed) {
+                                progress.report({ message: `Step ${i + 1}/${total} \u2014 tests failed after ${branch}` });
+                                const action = await vscode.window.showWarningMessage(
+                                    `Tests failed after step ${i + 1}/${total}: ${branch} \u2192 ${baseBranch}`,
+                                    { modal: true },
+                                    "Continue Anyway",
+                                    "Open Terminal",
+                                    "Abort"
+                                );
+
+                                if (action === "Open Terminal") {
+                                    openTerminal(`Tests: ${branch}`, repoRoot);
+                                    const postFix = await vscode.window.showInformationMessage(
+                                        "Investigate the test failure in the terminal, then decide how to proceed.",
+                                        { modal: true },
+                                        "Continue",
+                                        "Abort"
+                                    );
+                                    if (postFix === "Abort" || !postFix) {
+                                        results[results.length - 1].status = "test-failed";
+                                        const prev = mergedBranches.length > 0 ? ` Previously merged: ${mergedBranches.join(", ")}.` : "";
+                                        void showAutoInfo(
+                                            `Merge sequence stopped at step ${i + 1}/${total} (test failure): ${branch}.${prev} To undo all merges: git reset --hard ${preMergeHash}`,
+                                            20_000
+                                        );
+                                        break;
+                                    }
+                                } else if (action === "Abort" || !action) {
+                                    results[results.length - 1].status = "test-failed";
+                                    const prev = mergedBranches.length > 0 ? ` Previously merged: ${mergedBranches.join(", ")}.` : "";
+                                    void showAutoInfo(
+                                        `Merge sequence stopped at step ${i + 1}/${total} (test failure): ${branch}.${prev} To undo all merges: git reset --hard ${preMergeHash}`,
+                                        20_000
+                                    );
+                                    break;
+                                }
+                            }
                         }
                     }
-                }
-
-                // Show summary
-                const succeeded = results.filter(
-                    (r) => r.status === "merged" || r.status === "resolved"
-                ).length;
-                const failed = results.filter(
-                    (r) => r.status === "error" || r.status === "test-failed"
-                ).length;
-                const skipped = results.filter(
-                    (r) => r.status === "skipped" || r.status === "aborted"
-                ).length;
-
-                const summary =
-                    `Merge complete: ${succeeded} succeeded` +
-                    (failed > 0 ? `, ${failed} failed` : "") +
-                    (skipped > 0 ? `, ${skipped} skipped` : "");
-
-                // Offer cleanup
-                if (succeeded > 0) {
-                    const cleanup = await vscode.window.showInformationMessage(
-                        summary,
-                        "Cleanup Merged Worktrees",
-                        "Keep Worktrees"
+                        }
                     );
-                    if (cleanup === "Cleanup Merged Worktrees") {
-                        const mergedPicks = picks.filter((_, i) =>
-                            results[i]?.status === "merged" || results[i]?.status === "resolved"
-                        );
-                        await postMergeCleanup(
-                            repoRoot,
-                            mergedPicks.map((p) => ({
-                                path: p.worktree.path,
-                                branch: p.worktree.branch,
-                            })),
-                            { protectedBranches: getProtectedBranches() }
-                        );
-                        refreshAll();
-                    }
-                } else {
-                    void showAutoInfo(summary);
-                }
 
-                refreshAll();
+                    // Show summary
+                    const succeeded = results.filter(
+                        (r) => r.status === "merged" || r.status === "resolved"
+                    ).length;
+                    const failed = results.filter(
+                        (r) => r.status === "error" || r.status === "test-failed"
+                    ).length;
+                    const skipped = results.filter(
+                        (r) => r.status === "skipped" || r.status === "aborted"
+                    ).length;
+
+                    // Build per-step summary
+                    const stepLines = results.map((r, i) => {
+                        const icon = (r.status === "merged" || r.status === "resolved") ? "\u2713"
+                            : (r.status === "error" || r.status === "test-failed") ? "\u2717"
+                            : "\u2014";
+                        return `${icon} ${i + 1}. ${r.branch} \u2192 ${baseBranch}: ${r.message}`;
+                    }).join("\n");
+
+                    const summary =
+                        `Merge complete: ${succeeded} succeeded` +
+                        (failed > 0 ? `, ${failed} failed` : "") +
+                        (skipped > 0 ? `, ${skipped} skipped` : "") +
+                        `\n\n${stepLines}`;
+
+                    // Offer cleanup
+                    if (succeeded > 0) {
+                        const cleanup = await vscode.window.showInformationMessage(
+                            summary,
+                            "Cleanup Merged Worktrees",
+                            "Keep Worktrees"
+                        );
+                        if (cleanup === "Cleanup Merged Worktrees") {
+                            const mergedPicks = picks.filter((_, i) =>
+                                results[i]?.status === "merged" || results[i]?.status === "resolved"
+                            );
+                            await postMergeCleanup(
+                                repoRoot,
+                                mergedPicks.map((p) => ({
+                                    path: p.worktree.path,
+                                    branch: p.worktree.branch,
+                                })),
+                                { protectedBranches: getProtectedBranches() }
+                            );
+                            refreshAll();
+                        }
+                    } else {
+                        void showAutoInfo(summary);
+                    }
+
+                    refreshAll();
                 } catch (err) {
                     logError("Merge sequence failed", err);
                     void showAutoError(

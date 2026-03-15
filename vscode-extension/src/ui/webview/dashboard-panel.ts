@@ -55,6 +55,14 @@ export class DashboardPanel implements vscode.Disposable {
     private fileWatchers: vscode.FileSystemWatcher[] = [];
     private refreshInterval: NodeJS.Timeout | undefined;
     private fileChangeDebounce: Map<string, NodeJS.Timeout> = new Map();
+    private fileChangeBuffer: Array<{
+        timestamp: string;
+        worktreePath: string;
+        branch: string;
+        filePath: string;
+        changeType: string;
+    }> = [];
+    private static readonly MAX_BUFFER = 100;
 
     private constructor(
         panel: vscode.WebviewPanel,
@@ -200,6 +208,13 @@ export class DashboardPanel implements vscode.Disposable {
         switch (message.type) {
             case "ready":
                 await this.sendUpdate();
+                // Replay buffered file changes so the webview doesn't lose history on reload
+                for (const change of this.fileChangeBuffer) {
+                    void this.panel.webview.postMessage({
+                        type: "file-change",
+                        change,
+                    });
+                }
                 this.updateFileWatchers();
                 break;
 
@@ -241,6 +256,24 @@ export class DashboardPanel implements vscode.Disposable {
                     `git diff --stat; ` +
                     `echo "" && echo "── Staged changes ──" && ` +
                     `git diff --cached --stat`
+                );
+                break;
+            }
+
+            case "open-file-diff": {
+                const worktreePath = message.worktreePath as string;
+                const filePath = message.filePath as string;
+                const config =
+                    vscode.workspace.getConfiguration("grove");
+                const baseBranch = config.get<string>(
+                    "defaultBaseBranch",
+                    "main"
+                );
+                await vscode.commands.executeCommand(
+                    "grove.openFileDiff",
+                    worktreePath,
+                    filePath,
+                    baseBranch
                 );
                 break;
             }
@@ -391,15 +424,21 @@ export class DashboardPanel implements vscode.Disposable {
                     setTimeout(() => {
                         this.fileChangeDebounce.delete(key);
                         if (this.disposed) return;
+                        const change = {
+                            timestamp: new Date().toISOString(),
+                            worktreePath: session.worktreePath,
+                            branch: session.branch,
+                            filePath: relativePath,
+                            changeType,
+                        };
+                        // Buffer for replay on webview reload
+                        this.fileChangeBuffer.unshift(change);
+                        if (this.fileChangeBuffer.length > DashboardPanel.MAX_BUFFER) {
+                            this.fileChangeBuffer.length = DashboardPanel.MAX_BUFFER;
+                        }
                         void this.panel.webview.postMessage({
                             type: "file-change",
-                            change: {
-                                timestamp: new Date().toISOString(),
-                                worktreePath: session.worktreePath,
-                                branch: session.branch,
-                                filePath: relativePath,
-                                changeType,
-                            },
+                            change,
                         });
                     }, debounceMs)
                 );

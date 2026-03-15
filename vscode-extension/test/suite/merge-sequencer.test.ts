@@ -136,6 +136,7 @@ describe("merge-sequencer", () => {
             totalFilesChanged: 3,
             totalLinesAdded: 230,
             totalLinesRemoved: 25,
+            conflictPredictions: [],
         };
 
         it("includes the report header", () => {
@@ -151,7 +152,7 @@ describe("merge-sequencer", () => {
 
         it("includes overlaps section", () => {
             const md = formatMergeReportMarkdown(report);
-            assert.ok(md.includes("## File Overlaps"));
+            assert.ok(md.includes("## Worktree-to-Worktree File Overlaps"));
             assert.ok(md.includes("package.json"));
             assert.ok(md.includes("likely auto-resolvable"));
         });

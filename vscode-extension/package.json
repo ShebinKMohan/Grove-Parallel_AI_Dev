@@ -2,7 +2,7 @@
   "name": "grove-pilot",
   "displayName": "Grove — Worktree Control for Claude Code",
   "description": "Control plane for parallel AI development — git worktree management, Claude Code session orchestration, and merge intelligence",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "publisher": "ShebinMohanK",
   "author": {
     "name": "Shebin K Mohan",
@@ -194,18 +194,6 @@
         "icon": "$(layers)"
       },
       {
-        "command": "grove.addToWorkspace",
-        "title": "Show in Explorer",
-        "category": "Grove",
-        "icon": "$(folder-opened)"
-      },
-      {
-        "command": "grove.removeFromWorkspace",
-        "title": "Hide from Explorer",
-        "category": "Grove",
-        "icon": "$(folder)"
-      },
-      {
         "command": "grove.openFileDiff",
         "title": "Show Diff",
         "category": "Grove",
@@ -274,47 +262,42 @@
       "view/item/context": [
         {
           "command": "grove.launchSession",
-          "when": "viewItem == worktree || viewItem == worktree-main",
+          "when": "viewItem =~ /^worktree(-behind)?$/ || viewItem =~ /^worktree-main(-behind)?$/",
           "group": "inline@1"
         },
         {
           "command": "grove.syncWorktree",
-          "when": "viewItem == worktree || viewItem == worktree-main || viewItem == worktree-with-session",
+          "when": "viewItem =~ /-behind$/",
           "group": "inline@2"
         },
         {
           "command": "grove.openInTerminal",
-          "when": "viewItem == worktree || viewItem == worktree-main || viewItem == worktree-with-session",
+          "when": "viewItem =~ /^worktree/",
           "group": "inline@3"
         },
         {
           "command": "grove.openInNewWindow",
-          "when": "viewItem == worktree || viewItem == worktree-main || viewItem == worktree-with-session",
+          "when": "viewItem =~ /^worktree/",
           "group": "1_open"
         },
         {
           "command": "grove.launchSession",
-          "when": "viewItem == worktree || viewItem == worktree-main",
+          "when": "viewItem =~ /^worktree(-behind)?$/ || viewItem =~ /^worktree-main(-behind)?$/",
           "group": "1_open"
         },
         {
           "command": "grove.syncWorktree",
-          "when": "viewItem == worktree || viewItem == worktree-main || viewItem == worktree-with-session",
+          "when": "viewItem =~ /-behind$/",
           "group": "2_inspect"
         },
         {
           "command": "grove.viewDiff",
-          "when": "viewItem == worktree || viewItem == worktree-main || viewItem == worktree-with-session",
+          "when": "viewItem =~ /^worktree/",
           "group": "2_inspect"
         },
         {
-          "command": "grove.addToWorkspace",
-          "when": "viewItem == worktree || viewItem == worktree-with-session",
-          "group": "1_open"
-        },
-        {
           "command": "grove.deleteWorktree",
-          "when": "viewItem == worktree || viewItem == worktree-with-session",
+          "when": "viewItem =~ /^worktree(-behind)?$/ || viewItem =~ /^worktree-with-session(-behind)?$/",
           "group": "3_manage"
         },
         {
@@ -427,14 +410,6 @@
         },
         {
           "command": "grove.cleanupTeam",
-          "when": "false"
-        },
-        {
-          "command": "grove.addToWorkspace",
-          "when": "false"
-        },
-        {
-          "command": "grove.removeFromWorkspace",
           "when": "false"
         },
         {

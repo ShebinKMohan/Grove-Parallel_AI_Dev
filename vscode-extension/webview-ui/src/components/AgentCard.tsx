@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useMemo } from "react";
 import type { SessionInfo } from "../types";
 import vscode from "../vscode";
 
@@ -9,7 +9,6 @@ interface AgentCardProps {
 export function AgentCard({ session }: AgentCardProps) {
     const isActive =
         session.status === "running" || session.status === "idle";
-    const elapsed = useLiveElapsed(session.startedAt, session.endedAt, isActive);
 
     const startedLabel = useMemo(() => {
         return new Date(session.startedAt).toLocaleTimeString([], {
@@ -60,7 +59,6 @@ export function AgentCard({ session }: AgentCardProps) {
                         {statusLabel}
                     </span>
                 </div>
-                <span className="card-elapsed">{elapsed}</span>
             </div>
 
             {session.taskDescription && (
@@ -161,27 +159,3 @@ export function AgentCard({ session }: AgentCardProps) {
     );
 }
 
-function useLiveElapsed(
-    startedAt: string,
-    endedAt: string | undefined,
-    isActive: boolean
-): string {
-    const [now, setNow] = useState(Date.now());
-
-    useEffect(() => {
-        if (!isActive) return;
-        const id = setInterval(() => setNow(Date.now()), 1000);
-        return () => clearInterval(id);
-    }, [isActive, startedAt, endedAt]);
-
-    const start = new Date(startedAt).getTime();
-    const end = endedAt ? new Date(endedAt).getTime() : now;
-    const ms = end - start;
-    const seconds = Math.floor(ms / 1000);
-    if (seconds < 60) return `${seconds}s`;
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
-    const hours = Math.floor(minutes / 60);
-    const rem = minutes % 60;
-    return `${hours}h ${rem}m`;
-}

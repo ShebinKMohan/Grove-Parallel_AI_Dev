@@ -305,9 +305,15 @@ body {
 /* ── Cards List ────────────────────────────── */
 
 .cards-list {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: 10px;
+}
+
+@media (max-width: 500px) {
+    .cards-list {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* ── Agent Card ────────────────────────────── */
@@ -403,6 +409,7 @@ body {
 .status-label-running {
     color: var(--vscode-charts-green, #89d185);
     background: rgba(137, 209, 133, 0.12);
+    animation: pulse 2s ease-in-out infinite;
 }
 
 .status-label-idle {
@@ -420,11 +427,6 @@ body {
     background: rgba(241, 76, 76, 0.12);
 }
 
-.card-elapsed {
-    font-size: 11px;
-    color: var(--vscode-descriptionForeground);
-    flex-shrink: 0;
-}
 
 .card-task {
     font-size: 12px;
@@ -589,76 +591,108 @@ body {
     color: var(--vscode-charts-red, #f14c4c);
 }
 
-.activity-branch-items {
+.activity-dir-list {
     display: flex;
     flex-direction: column;
-    gap: 0;
 }
 
-.activity-row {
+.activity-dir {
+    border-top: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, rgba(128, 128, 128, 0.1)));
+}
+
+.activity-dir:first-child {
+    border-top: none;
+}
+
+.activity-dir-header {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 4px 12px;
+    gap: 6px;
+    padding: 5px 12px;
+    cursor: pointer;
+    user-select: none;
     font-size: 11px;
+    color: var(--vscode-foreground);
     transition: background 0.1s;
 }
 
-.activity-row:hover {
+.activity-dir-header:hover {
     background: var(--vscode-list-hoverBackground);
 }
 
-.activity-time {
+.activity-dir-arrow {
+    font-size: 9px;
+    width: 10px;
     color: var(--vscode-descriptionForeground);
-    font-family: var(--vscode-editor-font-family, monospace);
-    font-size: 10px;
-    flex-shrink: 0;
-    width: 60px;
 }
 
-.activity-label {
-    font-size: 10px;
+.activity-dir-name {
+    font-family: var(--vscode-editor-font-family, monospace);
     font-weight: 600;
-    text-transform: uppercase;
-    padding: 1px 5px;
-    border-radius: 2px;
+    color: var(--vscode-descriptionForeground);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.activity-dir-count {
     flex-shrink: 0;
-    width: 56px;
-    text-align: center;
+    font-size: 10px;
+    margin-left: auto;
 }
 
-.activity-label-created {
-    color: var(--vscode-charts-green, #89d185);
-    background: rgba(137, 209, 133, 0.1);
+.activity-dir-files {
+    display: flex;
+    flex-direction: column;
 }
 
-.activity-label-modified {
-    color: var(--vscode-charts-yellow, #cca700);
-    background: rgba(204, 167, 0, 0.1);
-}
-
-.activity-label-deleted {
-    color: var(--vscode-charts-red, #f14c4c);
-    background: rgba(241, 76, 76, 0.1);
-}
-
-.activity-filepath {
-    font-family: var(--vscode-editor-font-family, monospace);
+.activity-file-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 12px 3px 32px;
     font-size: 11px;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.activity-file-row:hover {
+    background: var(--vscode-list-hoverBackground);
+}
+
+.activity-file-icon {
+    flex-shrink: 0;
+    width: 14px;
+    text-align: center;
+    font-weight: 700;
+    font-family: var(--vscode-editor-font-family, monospace);
+    font-size: 12px;
+}
+
+.file-status-created {
+    color: var(--vscode-charts-green, #89d185);
+}
+
+.file-status-modified {
+    color: var(--vscode-charts-yellow, #cca700);
+}
+
+.file-status-deleted {
+    color: var(--vscode-charts-red, #f14c4c);
+}
+
+.activity-file-name {
+    font-family: var(--vscode-editor-font-family, monospace);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
 }
 
-.activity-repeat {
+.activity-file-edits {
     flex-shrink: 0;
     font-size: 10px;
-    color: var(--vscode-descriptionForeground);
-    background: var(--vscode-badge-background);
-    padding: 1px 5px;
-    border-radius: 8px;
-    margin-left: 4px;
+    margin-left: auto;
 }
 
 /* ── Overlap Alerts ────────────────────────── */

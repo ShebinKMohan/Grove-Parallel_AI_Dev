@@ -1,31 +1,147 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { FileChange } from "../types";
+import vscode from "../vscode";
 
 interface FileActivityStreamProps {
     changes: FileChange[];
 }
 
-interface GroupedChanges {
+/** Files to hide — Claude Code atomic writes, editor swap files, etc. */
+const NOISE_PATTERNS = [
+    /\.tmp\.\d+$/,
+    /\.swp$/,
+    /~$/,
+    /\.DS_Store$/,
+];
+
+function isNoise(filePath: string): boolean {
+    return NOISE_PATTERNS.some((p) => p.test(filePath));
+}
+
+interface FileSummary {
+    filePath: string;
+    fileName: string;
+    dir: string;
+    status: "created" | "modified" | "deleted";
+    changeCount: number;
+    lastChanged: string;
     branch: string;
     worktreePath: string;
-    changes: FileChange[];
+}
+
+interface DirGroup {
+    dir: string;
+    files: FileSummary[];
+}
+
+interface BranchSummary {
+    branch: string;
+    worktreePath: string;
+    dirs: DirGroup[];
+    stats: { created: number; modified: number; deleted: number };
+}
+
+function buildSummary(changes: FileChange[]): BranchSummary[] {
+    // Filter noise
+    const clean = changes.filter((c) => !isNoise(c.filePath));
+
+    // Group by branch
+    const branchMap = new Map<string, FileChange[]>();
+    for (const c of clean) {
+        const key = `${c.branch}::${c.worktreePath}`;
+        let arr = branchMap.get(key);
+        if (!arr) {
+            arr = [];
+            branchMap.set(key, arr);
+        }
+        arr.push(c);
+    }
+
+    const result: BranchSummary[] = [];
+
+    for (const [, branchChanges] of branchMap) {
+        // Deduplicate: keep latest change per file, accumulate count
+        const fileMap = new Map<string, FileSummary>();
+        for (const c of branchChanges) {
+            const existing = fileMap.get(c.filePath);
+            const parts = c.filePath.split("/");
+            const fileName = parts.pop() ?? c.filePath;
+            const dir = parts.length > 0 ? parts.join("/") : ".";
+
+            if (!existing || new Date(c.timestamp) > new Date(existing.lastChanged)) {
+                fileMap.set(c.filePath, {
+                    filePath: c.filePath,
+                    fileName,
+                    dir,
+                    status: c.changeType,
+                    changeCount: (existing?.changeCount ?? 0) + 1,
+                    lastChanged: c.timestamp,
+                    branch: c.branch,
+                    worktreePath: c.worktreePath,
+                });
+            } else {
+                existing.changeCount++;
+            }
+        }
+
+        // Group by directory
+        const dirMap = new Map<string, FileSummary[]>();
+        for (const file of fileMap.values()) {
+            let arr = dirMap.get(file.dir);
+            if (!arr) {
+                arr = [];
+                dirMap.set(file.dir, arr);
+            }
+            arr.push(file);
+        }
+
+        // Sort dirs, sort files within dirs
+        const dirs: DirGroup[] = Array.from(dirMap.entries())
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([dir, files]) => ({
+                dir,
+                files: files.sort((a, b) => a.fileName.localeCompare(b.fileName)),
+            }));
+
+        // Compute stats
+        let created = 0, modified = 0, deleted = 0;
+        for (const file of fileMap.values()) {
+            if (file.status === "created") created++;
+            else if (file.status === "deleted") deleted++;
+            else modified++;
+        }
+
+        const sample = branchChanges[0];
+        result.push({
+            branch: sample.branch,
+            worktreePath: sample.worktreePath,
+            dirs,
+            stats: { created, modified, deleted },
+        });
+    }
+
+    return result;
 }
 
 export function FileActivityStream({ changes }: FileActivityStreamProps) {
-    const grouped = useMemo(() => groupByBranch(changes), [changes]);
+    const summaries = useMemo(() => buildSummary(changes), [changes]);
+    const totalFiles = useMemo(
+        () => summaries.reduce((sum, s) => sum + s.stats.created + s.stats.modified + s.stats.deleted, 0),
+        [summaries]
+    );
 
     return (
         <div className="file-activity">
             <div className="activity-header">
                 <h2 className="section-title">File Activity</h2>
-                {changes.length > 0 && (
+                {totalFiles > 0 && (
                     <span className="activity-count text-muted">
-                        {changes.length} change{changes.length !== 1 ? "s" : ""}
+                        {totalFiles} file{totalFiles !== 1 ? "s" : ""}
                     </span>
                 )}
             </div>
 
-            {changes.length === 0 ? (
+            {totalFiles === 0 ? (
                 <div className="empty-state">
                     <p>No file changes detected yet.</p>
                     <p className="text-muted">
@@ -34,8 +150,11 @@ export function FileActivityStream({ changes }: FileActivityStreamProps) {
                 </div>
             ) : (
                 <div className="activity-groups">
-                    {grouped.map((group) => (
-                        <BranchGroup key={`${group.branch}-${group.worktreePath}`} group={group} />
+                    {summaries.map((summary) => (
+                        <BranchSummaryCard
+                            key={`${summary.branch}-${summary.worktreePath}`}
+                            summary={summary}
+                        />
                     ))}
                 </div>
             )}
@@ -43,30 +162,13 @@ export function FileActivityStream({ changes }: FileActivityStreamProps) {
     );
 }
 
-function BranchGroup({ group }: { group: GroupedChanges }) {
-    const deduplicated = useMemo(
-        () => deduplicateChanges(group.changes),
-        [group.changes]
-    );
-
-    const stats = useMemo(() => {
-        // Count unique files, not raw events
-        const files = new Set<string>();
-        let created = 0, modified = 0, deleted = 0;
-        for (const c of group.changes) {
-            if (files.has(c.filePath)) continue;
-            files.add(c.filePath);
-            if (c.changeType === "created") created++;
-            else if (c.changeType === "modified") modified++;
-            else deleted++;
-        }
-        return { created, modified, deleted };
-    }, [group.changes]);
+function BranchSummaryCard({ summary }: { summary: BranchSummary }) {
+    const { stats } = summary;
 
     return (
         <div className="activity-branch-group">
             <div className="activity-branch-header">
-                <span className="activity-branch-name">{group.branch}</span>
+                <span className="activity-branch-name">{summary.branch}</span>
                 <span className="activity-branch-stats">
                     {stats.created > 0 && (
                         <span className="stat-created">+{stats.created}</span>
@@ -79,88 +181,101 @@ function BranchGroup({ group }: { group: GroupedChanges }) {
                     )}
                 </span>
             </div>
-            <div className="activity-branch-items">
-                {deduplicated.map((change, i) => (
-                    <FileChangeRow key={`${group.branch}-${change.filePath}-${i}`} change={change} />
+            <div className="activity-dir-list">
+                {summary.dirs.map((dirGroup) => (
+                    <DirSection
+                        key={dirGroup.dir}
+                        group={dirGroup}
+                        worktreePath={summary.worktreePath}
+                        branch={summary.branch}
+                    />
                 ))}
             </div>
         </div>
     );
 }
 
-function FileChangeRow({ change }: { change: FileChange & { repeatCount?: number } }) {
-    const time = new Date(change.timestamp).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-    });
-
-    const label =
-        change.changeType === "created"
-            ? "Added"
-            : change.changeType === "deleted"
-              ? "Deleted"
-              : "Modified";
-
-    const repeat = change.repeatCount ?? 1;
+function DirSection({
+    group,
+    worktreePath,
+    branch,
+}: {
+    group: DirGroup;
+    worktreePath: string;
+    branch: string;
+}) {
+    const [collapsed, setCollapsed] = useState(false);
 
     return (
-        <div className="activity-row">
-            <span className="activity-time">{time}</span>
-            <span className={`activity-label activity-label-${change.changeType}`}>
-                {label}
-            </span>
-            <span className="activity-filepath" title={change.filePath}>
-                {change.filePath}
-            </span>
-            {repeat > 1 && (
-                <span className="activity-repeat" title={`${repeat} consecutive changes`}>
-                    x{repeat}
+        <div className="activity-dir">
+            <div
+                className="activity-dir-header"
+                onClick={() => setCollapsed(!collapsed)}
+            >
+                <span className="activity-dir-arrow">
+                    {collapsed ? "\u25B6" : "\u25BC"}
                 </span>
+                <span className="activity-dir-name">{group.dir}/</span>
+                <span className="activity-dir-count text-muted">
+                    {group.files.length}
+                </span>
+            </div>
+            {!collapsed && (
+                <div className="activity-dir-files">
+                    {group.files.map((file) => (
+                        <FileRow
+                            key={file.filePath}
+                            file={file}
+                            worktreePath={worktreePath}
+                            branch={branch}
+                        />
+                    ))}
+                </div>
             )}
         </div>
     );
 }
 
-/**
- * Deduplicate consecutive changes to the same file within a time window.
- * If the same file is modified 20 times in a row, collapse to one entry
- * showing the latest timestamp and a repeat count.
- */
-function deduplicateChanges(changes: FileChange[]): (FileChange & { repeatCount?: number })[] {
-    if (changes.length === 0) return [];
+function FileRow({
+    file,
+    worktreePath,
+    branch,
+}: {
+    file: FileSummary;
+    worktreePath: string;
+    branch: string;
+}) {
+    const statusIcon =
+        file.status === "created"
+            ? "+"
+            : file.status === "deleted"
+              ? "\u2212"
+              : "~";
 
-    const result: (FileChange & { repeatCount?: number })[] = [];
-    let current = { ...changes[0], repeatCount: 1 };
+    const statusClass = `file-status-${file.status}`;
 
-    for (let i = 1; i < changes.length; i++) {
-        const c = changes[i];
-        if (
-            c.filePath === current.filePath &&
-            c.changeType === current.changeType &&
-            c.branch === current.branch
-        ) {
-            // Same file, same type — just increment the count
-            current.repeatCount = (current.repeatCount ?? 1) + 1;
-        } else {
-            result.push(current);
-            current = { ...c, repeatCount: 1 };
-        }
-    }
-    result.push(current);
-    return result;
-}
-
-function groupByBranch(changes: FileChange[]): GroupedChanges[] {
-    const map = new Map<string, GroupedChanges>();
-    for (const change of changes) {
-        const key = `${change.branch}::${change.worktreePath}`;
-        let group = map.get(key);
-        if (!group) {
-            group = { branch: change.branch, worktreePath: change.worktreePath, changes: [] };
-            map.set(key, group);
-        }
-        group.changes.push(change);
-    }
-    return Array.from(map.values());
+    return (
+        <div
+            className="activity-file-row"
+            onClick={() =>
+                vscode.postMessage({
+                    type: "open-file-diff",
+                    worktreePath,
+                    branch,
+                    filePath: file.filePath,
+                })
+            }
+            title={`${file.filePath} — click to view diff`}
+        >
+            <span className={`activity-file-icon ${statusClass}`}>
+                {statusIcon}
+            </span>
+            <span className="activity-file-name">{file.fileName}</span>
+            {file.changeCount > 1 && (
+                <span className="activity-file-edits text-muted">
+                    {file.changeCount} edits
+                </span>
+            )}
+        </div>
+    );
 }

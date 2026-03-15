@@ -13,7 +13,7 @@ import {
     branchExistsLocally,
     branchExistsOnRemote,
 } from "../utils/git";
-import { ensureGitignored, removeFromGitignore } from "./gitignore";
+import { ensureGitignored } from "./gitignore";
 import { installDependencies, type PackageManager } from "../utils/package-manager";
 import { log } from "../utils/logger";
 import {
@@ -452,10 +452,10 @@ export async function removeWorktree(
 
     const result: CleanupResult = { path: wtPath, removed: true };
 
-    // Clean up .gitignore entry
-    if (removeFromGitignore(repoRoot, wtPath)) {
-        log(`Removed ${wtPath} from .gitignore`);
-    }
+    // NOTE: We intentionally do NOT remove the .gitignore entry here.
+    // Stale gitignore patterns are harmless (they match nothing), but
+    // modifying .gitignore after a merge dirties the working tree on
+    // the base branch — which is far worse.
 
     // Optionally delete branch
     if (
@@ -510,6 +510,23 @@ export interface ChangedFile {
  * Uses `git diff --name-status` against the base branch.
  * Falls back to `git status --porcelain` for uncommitted changes.
  */
+/** Directories that should never appear in changed file lists. */
+const NOISE_DIRS = [
+    "node_modules/",
+    ".git/",
+    "dist/",
+    ".vite/",
+    "__pycache__/",
+    ".next/",
+    ".nuxt/",
+    "coverage/",
+    ".cache/",
+];
+
+function isNoisePath(filePath: string): boolean {
+    return NOISE_DIRS.some((dir) => filePath.startsWith(dir) || filePath.includes(`/${dir}`));
+}
+
 export async function getChangedFilesWithStatus(
     worktreePath: string,
     baseBranch: string = "main"
@@ -530,7 +547,7 @@ export async function getChangedFilesWithStatus(
                 if (tab === -1) continue;
                 const code = line.slice(0, tab).trim();
                 const filePath = line.slice(tab + 1).trim();
-                if (!filePath) continue;
+                if (!filePath || isNoisePath(filePath)) continue;
                 const status = parseGitStatusCode(code);
                 files.push({ filePath, status });
                 seen.add(filePath);
@@ -547,7 +564,7 @@ export async function getChangedFilesWithStatus(
             for (const line of raw.split("\n")) {
                 if (!line || line.length < 3) continue;
                 const filePath = line.slice(3).trim();
-                if (!filePath || seen.has(filePath)) continue;
+                if (!filePath || seen.has(filePath) || isNoisePath(filePath)) continue;
                 const x = line[0];
                 const y = line[1];
                 let status: ChangedFile["status"] = "modified";

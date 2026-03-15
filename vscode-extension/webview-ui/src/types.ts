@@ -58,6 +58,7 @@ export type WebViewMessage =
     | { type: "stop-session"; sessionId: string }
     | { type: "focus-session"; sessionId: string }
     | { type: "view-diff"; worktreePath: string; branch: string }
+    | { type: "open-file-diff"; worktreePath: string; branch: string; filePath: string }
     | { type: "dismiss-overlap"; filePath: string }
     | { type: "dismiss-all-overlaps" }
     | { type: "clear-completed" }

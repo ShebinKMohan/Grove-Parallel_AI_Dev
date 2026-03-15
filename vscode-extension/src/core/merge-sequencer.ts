@@ -32,7 +32,7 @@ function humanizeMergeError(raw: string, branch: string): string {
     if (raw.includes("not something we can merge")) {
         return `Branch '${branch}' could not be found. Make sure the branch name is correct and exists locally.`;
     }
-    if (raw.includes("index.lock") || raw.includes("Unable to create") && raw.includes(".lock")) {
+    if (raw.includes("index.lock") || (raw.includes("Unable to create") && raw.includes(".lock"))) {
         return `Git is locked by another process. Wait a moment and try again, or delete the lock file: rm -f .git/index.lock`;
     }
     if (raw.includes("CONFLICT") || raw.includes("conflict")) {
@@ -86,6 +86,17 @@ interface FileOverlapInfo {
     likelyAutoResolvable: boolean;
 }
 
+export interface ConflictPrediction {
+    /** Branch that would conflict with the base branch */
+    branch: string;
+    /** Files predicted to conflict */
+    conflictFiles: string[];
+    /** Files modified on both base and branch (potential conflicts) */
+    baseOverlapFiles: string[];
+    /** Whether the prediction was done via merge-tree (exact) or heuristic */
+    method: "merge-tree" | "file-overlap";
+}
+
 export interface MergeReport {
     /** Timestamp of report generation */
     generatedAt: string;
@@ -95,6 +106,8 @@ export interface MergeReport {
     worktrees: WorktreeMergeInfo[];
     /** Files modified in multiple worktrees */
     overlaps: FileOverlapInfo[];
+    /** Predicted merge conflicts against the base branch */
+    conflictPredictions: ConflictPrediction[];
     /** Recommended merge order */
     mergeOrder: MergeOrderEntry[];
     /** Total files changed across all worktrees */
@@ -130,11 +143,149 @@ interface MergeStep {
 }
 
 // ────────────────────────────────────────────
+// Pre-Merge Conflict Prediction
+// ────────────────────────────────────────────
+
+/**
+ * Predict merge conflicts between a branch and the base branch
+ * WITHOUT modifying the working tree.
+ *
+ * Strategy:
+ * 1. Try `git merge-tree` (Git 2.38+) for exact conflict detection.
+ * 2. Fall back to file-overlap heuristic: find files changed on BOTH
+ *    the base branch and the worktree branch since they diverged.
+ */
+async function predictBranchConflicts(
+    repoRoot: string,
+    branch: string,
+    baseBranch: string
+): Promise<ConflictPrediction> {
+    // Try git merge-tree first (available since Git 2.38)
+    try {
+        // merge-tree --write-tree exits 0 for clean merge, 1 for conflicts
+        await git(
+            ["merge-tree", "--write-tree", "--no-messages", baseBranch, branch],
+            repoRoot
+        );
+        // Exit code 0 = clean merge, no conflicts
+        const baseOverlapFiles = await getBaseOverlapFiles(
+            repoRoot, branch, baseBranch
+        );
+        return {
+            branch,
+            conflictFiles: [],
+            baseOverlapFiles,
+            method: "merge-tree",
+        };
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+
+        // merge-tree exits with code 1 when there ARE conflicts.
+        // The output lists conflicted files. Parse them.
+        if (msg.includes("CONFLICT") || msg.includes("conflict")) {
+            const conflictFiles = parseMergeTreeConflicts(msg);
+            const baseOverlapFiles = await getBaseOverlapFiles(
+                repoRoot, branch, baseBranch
+            );
+            return {
+                branch,
+                conflictFiles,
+                baseOverlapFiles,
+                method: "merge-tree",
+            };
+        }
+
+        // merge-tree command not available (old git) — fall through to heuristic
+    }
+
+    // Fallback: file-overlap heuristic
+    const baseOverlapFiles = await getBaseOverlapFiles(
+        repoRoot, branch, baseBranch
+    );
+
+    return {
+        branch,
+        conflictFiles: [],
+        baseOverlapFiles,
+        method: "file-overlap",
+    };
+}
+
+/**
+ * Parse conflict file paths from `git merge-tree` error output.
+ */
+function parseMergeTreeConflicts(output: string): string[] {
+    const files: string[] = [];
+    for (const line of output.split("\n")) {
+        // "CONFLICT (content): Merge conflict in <file>"
+        const contentMatch = line.match(/Merge conflict in (.+)/);
+        if (contentMatch) {
+            files.push(contentMatch[1].trim());
+            continue;
+        }
+        // "CONFLICT (modify/delete): <file> deleted in ..."
+        const modDeleteMatch = line.match(
+            /CONFLICT \((?:modify\/delete|delete\/modify)\): (.+?) deleted/
+        );
+        if (modDeleteMatch) {
+            files.push(modDeleteMatch[1].trim());
+            continue;
+        }
+        // "CONFLICT (add/add): Merge conflict in <file>"
+        // Already covered by contentMatch above
+    }
+    return [...new Set(files)];
+}
+
+/**
+ * Find files that were changed on BOTH the base branch and the given branch
+ * since they diverged (their merge-base). These are potential conflict sources
+ * even if git can auto-merge them — the user should know about them.
+ */
+async function getBaseOverlapFiles(
+    repoRoot: string,
+    branch: string,
+    baseBranch: string
+): Promise<string[]> {
+    try {
+        const mergeBase = (
+            await git(["merge-base", baseBranch, branch], repoRoot)
+        ).trim();
+
+        if (!mergeBase) return [];
+
+        // Files changed on the base branch since divergence
+        const baseChangesRaw = await git(
+            ["diff", "--name-only", `${mergeBase}..${baseBranch}`],
+            repoRoot
+        );
+        const baseFiles = new Set(
+            baseChangesRaw.split("\n").filter(Boolean)
+        );
+
+        if (baseFiles.size === 0) return [];
+
+        // Files changed on the worktree branch since divergence
+        const branchChangesRaw = await git(
+            ["diff", "--name-only", `${mergeBase}..${branch}`],
+            repoRoot
+        );
+        const branchFiles = branchChangesRaw.split("\n").filter(Boolean);
+
+        // Intersection: files changed on both sides
+        return branchFiles.filter((f) => baseFiles.has(f));
+    } catch {
+        return [];
+    }
+}
+
+// ────────────────────────────────────────────
 // Merge Report Generation
 // ────────────────────────────────────────────
 
 /**
  * Generate a merge readiness report for a set of worktrees.
+ * Includes pre-merge conflict prediction against the base branch.
  */
 export async function generateMergeReport(
     worktreePaths: string[],
@@ -155,7 +306,7 @@ export async function generateMergeReport(
         }
     }
 
-    // Detect overlaps
+    // Detect worktree-to-worktree overlaps
     const overlaps: FileOverlapInfo[] = [];
     for (const [filePath, branches] of allChangedFiles) {
         if (branches.length > 1) {
@@ -164,6 +315,40 @@ export async function generateMergeReport(
                 branches,
                 likelyAutoResolvable: isLikelyAutoResolvable(filePath),
             });
+        }
+    }
+
+    // Predict conflicts against the base branch
+    const conflictPredictions: ConflictPrediction[] = [];
+    if (worktreePaths.length > 0) {
+        let repoRoot: string;
+        try {
+            const { getRepoRoot } = await import("../utils/git");
+            repoRoot = await getRepoRoot(worktreePaths[0]);
+        } catch {
+            repoRoot = path.resolve(worktreePaths[0], "..");
+        }
+
+        for (const info of worktreeInfos) {
+            if (info.changedFiles.length === 0) continue;
+            try {
+                const prediction = await predictBranchConflicts(
+                    repoRoot,
+                    info.branch,
+                    baseBranch
+                );
+                if (
+                    prediction.conflictFiles.length > 0 ||
+                    prediction.baseOverlapFiles.length > 0
+                ) {
+                    conflictPredictions.push(prediction);
+                }
+            } catch (err) {
+                logError(
+                    `Failed to predict conflicts for ${info.branch}`,
+                    err
+                );
+            }
         }
     }
 
@@ -188,6 +373,7 @@ export async function generateMergeReport(
         baseBranch,
         worktrees: worktreeInfos,
         overlaps,
+        conflictPredictions,
         mergeOrder,
         totalFilesChanged,
         totalLinesAdded,
@@ -645,14 +831,82 @@ export function formatMergeReportMarkdown(report: MergeReport): string {
     lines.push(`| Lines added | +${report.totalLinesAdded} |`);
     lines.push(`| Lines removed | -${report.totalLinesRemoved} |`);
     lines.push(`| File overlaps | ${report.overlaps.length} |`);
+
+    // Conflict predictions summary
+    const totalConflictFiles = report.conflictPredictions.reduce(
+        (sum, p) => sum + p.conflictFiles.length, 0
+    );
+    const totalBaseOverlaps = report.conflictPredictions.reduce(
+        (sum, p) => sum + p.baseOverlapFiles.length, 0
+    );
+    if (totalConflictFiles > 0) {
+        lines.push(`| **Predicted conflicts** | **${totalConflictFiles} file(s)** |`);
+    }
+    if (totalBaseOverlaps > 0) {
+        lines.push(`| Files changed on both base & branch | ${totalBaseOverlaps} |`);
+    }
     lines.push("");
 
-    // Overlaps
+    // Conflict predictions (most important — show first)
+    if (report.conflictPredictions.length > 0) {
+        const hasExactConflicts = report.conflictPredictions.some(
+            (p) => p.conflictFiles.length > 0
+        );
+
+        if (hasExactConflicts) {
+            lines.push("## \u26A0\uFE0F Predicted Merge Conflicts");
+            lines.push("");
+            lines.push(
+                "These branches WILL conflict with `" + report.baseBranch +
+                "` when merged. Resolve these before merging or be prepared to handle conflicts:"
+            );
+            lines.push("");
+
+            for (const pred of report.conflictPredictions) {
+                if (pred.conflictFiles.length === 0) continue;
+                lines.push(`### \`${pred.branch}\` — ${pred.conflictFiles.length} conflict(s)`);
+                lines.push("");
+                for (const file of pred.conflictFiles) {
+                    lines.push(`- \u274C \`${file}\``);
+                }
+                lines.push("");
+            }
+        }
+
+        // Base overlap warnings (files changed on both sides but may auto-resolve)
+        const hasBaseOverlaps = report.conflictPredictions.some(
+            (p) => p.baseOverlapFiles.length > 0
+        );
+        if (hasBaseOverlaps) {
+            lines.push("## Files Changed on Both Base & Branch");
+            lines.push("");
+            lines.push(
+                "These files were modified on `" + report.baseBranch +
+                "` since the branch diverged. They may merge cleanly or may conflict:"
+            );
+            lines.push("");
+
+            for (const pred of report.conflictPredictions) {
+                if (pred.baseOverlapFiles.length === 0) continue;
+                lines.push(`**\`${pred.branch}\`** (${pred.baseOverlapFiles.length} shared file(s)):`);
+                lines.push("");
+                for (const file of pred.baseOverlapFiles) {
+                    const isConfirmedConflict = pred.conflictFiles.includes(file);
+                    const icon = isConfirmedConflict ? "\u274C" : "\u26A0\uFE0F";
+                    const label = isConfirmedConflict ? "will conflict" : "changed on both sides";
+                    lines.push(`- ${icon} \`${file}\` — ${label}`);
+                }
+                lines.push("");
+            }
+        }
+    }
+
+    // Worktree-to-worktree overlaps
     if (report.overlaps.length > 0) {
-        lines.push("## File Overlaps");
+        lines.push("## Worktree-to-Worktree File Overlaps");
         lines.push("");
         lines.push(
-            "These files were modified in multiple worktrees and may cause merge conflicts:"
+            "These files were modified in multiple worktrees and will conflict when merging sequentially:"
         );
         lines.push("");
 

@@ -241,16 +241,12 @@ export class AgentItem extends vscode.TreeItem {
     public readonly agentState: AgentState;
     public readonly teamId: string;
 
-    constructor(agent: AgentState, teamId: string, tracker?: SessionTracker) {
+    constructor(agent: AgentState, teamId: string, _tracker?: SessionTracker) {
         super(agent.displayName, vscode.TreeItemCollapsibleState.None);
         this.agentState = agent;
         this.teamId = teamId;
 
-        const elapsed = AgentItem.computeElapsed(agent, tracker);
         const parts: string[] = [agent.role, AgentItem.statusLabel(agent.status)];
-        if (elapsed) {
-            parts.push(elapsed);
-        }
         this.description = parts.join(" \u00b7 ");
 
         this.contextValue =
@@ -277,16 +273,6 @@ export class AgentItem extends vscode.TreeItem {
             case "stopped":
                 return "Stopped";
         }
-    }
-
-    private static computeElapsed(
-        agent: AgentState,
-        tracker?: SessionTracker
-    ): string | undefined {
-        if (!tracker || !agent.sessionId) return undefined;
-        const session = tracker.getSession(agent.sessionId);
-        if (!session) return undefined;
-        return tracker.getElapsedTime(session);
     }
 
     private static getIcon(status: AgentState["status"]): vscode.ThemeIcon {
@@ -367,13 +353,19 @@ export class WorktreeItem extends vscode.TreeItem {
         this.tooltip = this.buildTooltip();
         this.iconPath = this.getStatusIcon();
         this.contextValue = this.resolveContextValue();
-        this.resourceUri = vscode.Uri.file(worktree.path);
+        // NOTE: Do NOT set resourceUri here. When the worktree path is also
+        // added as a workspace folder (via "Show in Explorer"), VS Code's
+        // multi-root workspace handling suppresses tree items whose resourceUri
+        // matches a workspace folder root, causing the item to disappear.
+        // The item already has custom icons, labels, and descriptions so
+        // file-decoration lookups from resourceUri are not needed.
     }
 
     private resolveContextValue(): string {
-        if (this.worktree.isMain) return "worktree-main";
-        if (this.hasActiveSession) return "worktree-with-session";
-        return "worktree";
+        const behind = this.worktree.behind > 0 ? "-behind" : "";
+        if (this.worktree.isMain) return `worktree-main${behind}`;
+        if (this.hasActiveSession) return `worktree-with-session${behind}`;
+        return `worktree${behind}`;
     }
 
     private buildDescription(): string {
@@ -549,8 +541,7 @@ export class SessionItem extends vscode.TreeItem {
         super(session.branch, vscode.TreeItemCollapsibleState.None);
         this.session = session;
 
-        const elapsed = tracker.getElapsedTime(session);
-        const parts: string[] = [SessionItem.statusLabel(session), elapsed];
+        const parts: string[] = [SessionItem.statusLabel(session)];
 
         if (session.taskDescription) {
             parts.push(session.taskDescription);
@@ -611,7 +602,7 @@ export class SessionItem extends vscode.TreeItem {
 
     private static buildTooltip(
         session: SessionInfo,
-        tracker: SessionTracker
+        _tracker: SessionTracker
     ): vscode.MarkdownString {
         const md = new vscode.MarkdownString("", true);
         md.supportThemeIcons = true;
@@ -628,7 +619,7 @@ export class SessionItem extends vscode.TreeItem {
                         ? "$(error)"
                         : "$(clock)";
         md.appendMarkdown(
-            `${statusIcon} **${SessionItem.statusLabel(session)}** \u2014 ${tracker.getElapsedTime(session)}\n\n`
+            `${statusIcon} **${SessionItem.statusLabel(session)}**\n\n`
         );
 
         if (session.taskDescription) {

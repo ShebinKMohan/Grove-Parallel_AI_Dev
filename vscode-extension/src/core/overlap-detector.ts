@@ -95,7 +95,6 @@ export class OverlapDetector implements vscode.Disposable {
     readonly onDidChangeOverlaps = this._onDidChangeOverlaps.event;
 
     constructor(
-        _repoRoot: string,
         private readonly debounceMs: number = 500
     ) {}
 

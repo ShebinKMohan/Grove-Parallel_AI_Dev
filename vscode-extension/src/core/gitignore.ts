@@ -1,33 +1,22 @@
 /**
- * Auto-manage .gitignore entries for worktree directories.
- * Gitignore utilities for Grove worktree management.
+ * Auto-manage .gitignore entries for worktree directories
+ * and the .grove/ local state directory.
  */
 
 import * as fs from "fs";
 import * as path from "path";
 
+const GROVE_DIR_PATTERN = "/.grove/";
+
 /**
- * Ensure a worktree path is in .gitignore.
+ * Add a pattern to .gitignore. Creates the file if it doesn't exist.
  * Returns true if the entry was added, false if already present.
  */
-export function ensureGitignored(
-    repoRoot: string,
-    worktreePath: string
+function addToGitignore(
+    gitignorePath: string,
+    pattern: string,
+    header: string
 ): boolean {
-    const gitignorePath = path.join(repoRoot, ".gitignore");
-
-    // Compute relative pattern
-    const resolved = path.resolve(worktreePath);
-    const resolvedRoot = path.resolve(repoRoot);
-
-    if (!resolved.startsWith(resolvedRoot + path.sep) && resolved !== resolvedRoot) {
-        // Worktree is outside the repo — nothing to gitignore
-        return false;
-    }
-
-    const relative = path.relative(resolvedRoot, resolved).replace(/\\/g, "/");
-    const pattern = `/${relative}/`;
-
     if (fs.existsSync(gitignorePath)) {
         let content = fs.readFileSync(gitignorePath, "utf-8");
         if (content.includes(pattern)) {
@@ -39,41 +28,40 @@ export function ensureGitignored(
         content += `${pattern}\n`;
         fs.writeFileSync(gitignorePath, content);
     } else {
-        fs.writeFileSync(
-            gitignorePath,
-            `# Grove managed worktrees\n${pattern}\n`
-        );
+        fs.writeFileSync(gitignorePath, `${header}\n${pattern}\n`);
     }
-
     return true;
 }
 
 /**
- * Remove a worktree path from .gitignore.
- * Returns true if an entry was removed, false if not found.
+ * Ensure a worktree path is in .gitignore.
+ * Returns true if the entry was added, false if already present.
  */
-export function removeFromGitignore(
+export function ensureGitignored(
     repoRoot: string,
     worktreePath: string
 ): boolean {
-    const gitignorePath = path.join(repoRoot, ".gitignore");
-    if (!fs.existsSync(gitignorePath)) return false;
-
     const resolved = path.resolve(worktreePath);
     const resolvedRoot = path.resolve(repoRoot);
 
     if (!resolved.startsWith(resolvedRoot + path.sep) && resolved !== resolvedRoot) {
+        // Worktree is outside the repo — nothing to gitignore
         return false;
     }
 
     const relative = path.relative(resolvedRoot, resolved).replace(/\\/g, "/");
     const pattern = `/${relative}/`;
+    const gitignorePath = path.join(repoRoot, ".gitignore");
 
-    const content = fs.readFileSync(gitignorePath, "utf-8");
-    if (!content.includes(pattern)) return false;
+    return addToGitignore(gitignorePath, pattern, "# Grove managed worktrees");
+}
 
-    const lines = content.split("\n");
-    const filtered = lines.filter((line) => line.trim() !== pattern);
-    fs.writeFileSync(gitignorePath, filtered.join("\n"));
-    return true;
+/**
+ * Ensure .grove/ (local state directory) is in .gitignore.
+ * Called when .grove/ is first created to persist sessions or teams.
+ * Returns true if the entry was added, false if already present.
+ */
+export function ensureGroveDirIgnored(repoRoot: string): boolean {
+    const gitignorePath = path.join(repoRoot, ".gitignore");
+    return addToGitignore(gitignorePath, GROVE_DIR_PATTERN, "# Grove local state");
 }
